@@ -17,7 +17,7 @@ http://sourceforge.net/projects/knowceans/
 
 HDP paper:
 http://www.cs.berkeley.edu/~jordan/papers/hdp.pdf
-opic model
+
 --------------
 
 update:
