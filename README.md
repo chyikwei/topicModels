@@ -8,7 +8,7 @@ Note:
 1. It a extension for Mallet, so you need to include them in Mallet's source code.<br  />
 2. You will also need the "knowceans" package.<br  />
 3. For HDP, The source code I got is for the paper "Implementing the HDP with minimum code complexity" by Gregor Heinrich<br /> 
-4. ISI_Abstract_original.txt is used for testing.<br  />
+4. files in the "data" floder is used for testing.<br  />
 
 Also, you can find all you need in the following reference:
  * Mallet: http://mallet.cs.umass.edu/
