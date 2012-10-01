@@ -13,6 +13,7 @@ import cc.mallet.pipe.TokenSequence2FeatureSequence;
 import cc.mallet.pipe.TokenSequenceRemoveStopwords;
 import cc.mallet.pipe.iterator.CsvIterator;
 import cc.mallet.topics.HDP;
+import cc.mallet.topics.HDPInferencer;
 import cc.mallet.types.InstanceList;
 
 
@@ -22,9 +23,10 @@ public class HDPTest {
 	 * @param args
 	 */
 	public static void main(String[] args) throws Exception{
-		//input file
-		String inputFileName = "data/ISI_Abstract_original.txt";
-						
+		
+		//input file, one file for training, one for test
+		String inputFileName = "data/ISI_Abstract_train.txt";
+		String testFileName = "data/ISI_Abstract_test.txt";				
 				
 		// Begin by importing documents from text to feature sequences
 		ArrayList<Pipe> pipeList = new ArrayList<Pipe>();
@@ -44,23 +46,44 @@ public class HDPTest {
 		InstanceList testInstances = new InstanceList (instances.getPipe());
 				
 		Reader insfileReader = new InputStreamReader(new FileInputStream(new File(inputFileName)), "UTF-8");
-		//Reader testfileReader = new InputStreamReader(new FileInputStream(new File(args[1])), "UTF-8");
+		Reader testfileReader = new InputStreamReader(new FileInputStream(new File(testFileName)), "UTF-8");
 				
 		instances.addThruPipe(new CsvIterator (insfileReader, Pattern.compile("^(\\S*)[\\s,]*(\\S*)[\\s,]*(.*)$"),
 													   3, 2, 1)); // data, label, name fields
-		//testInstances.addThruPipe(new CsvIterator (testfileReader, Pattern.compile("^(\\S*)[\\s,]*(\\S*)[\\s,]*(.*)$"),
-		//		   3, 2, 1)); // data, label, name fields
+		testInstances.addThruPipe(new CsvIterator (testfileReader, Pattern.compile("^(\\S*)[\\s,]*(\\S*)[\\s,]*(.*)$"),
+				   3, 2, 1)); // data, label, name fields
 		
-		HDP hdp = new HDP(1.0, 0.4, 1.0, 5);
+		//setup HDP parameters(alpha, beta, gamma, initialTopics)
+		HDP hdp = new HDP(1.0, 0.1, 1.0, 10);
 		hdp.initialize(instances);
-		hdp.estimate(500, true);
 		
-		hdp.trimTopics();
+		//set number of iterations, and display result or not 
+		hdp.estimate(2000);
 		
-		System.out.println();
+		//get topic distribution for first instance
+		double[] distr = hdp.topicDistribution(0);
+		//print out
+		for(int j=0; j<distr.length ; j++){
+			System.out.print(distr[j] + " ");
+		}
 		
-		hdp.printTopWord2(6);
-
+		//for inferencer
+		HDPInferencer inferencer = hdp.getInferencer();
+		inferencer.setInstance(testInstances);
+		inferencer.estimate(100);
+		//get topic distribution for first test instance
+		distr = inferencer.topicDistribution(0);		
+		//print out
+		for(int j=0; j<distr.length ; j++){
+			System.out.print(distr[j] + " ");
+		}
+		//get preplexity
+		double prep = inferencer.getPreplexity();
+		System.out.println("preplexity for the test set=" + prep);
+		
+		//10-folds cross validation, with 1000 iteration for each test.
+		hdp.runCrossValidation(10, 1000);
+		
 	}
 
 }

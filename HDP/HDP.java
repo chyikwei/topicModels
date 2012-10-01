@@ -1,12 +1,38 @@
-/* Hierarchical Dirichlet Process for LDA
+/* Hierarchical Dirichlet Process for Mallet
  * Version:0.1
  * 
  * Author: CHyi-Kwei Yau
- * Latest Update: 2012/09/27
  * 
  * HDP implementation on Mallet 
- * Algorithms & Code form "Implementing the HDP with minimum code complexity" by Gregor Heinrich
+ * Basic structure & Code form "Implementing the HDP with minimum code complexity" by Gregor Heinrich.
  * 
+ * ==================================================================================================
+ * TODO List:
+ * - export HDP result- top words, topic distribution
+ * - export Inference result - same
+ * 
+ * 
+ * Update History:
+ * 
+ * 2012/10/01 version 0.1
+ *  - bug fix: print correct topic number in training
+ *  - add cross validation in HDP
+ *  - add inferencer class
+ *  - add preplexity calculation in inferencer
+ * 
+ * 2012/09/29 Version 0.1
+ *  - bug fix: printed result are correct now
+ *  - bug fix: empty topic are caused by initial topic number > 0
+ *  - change initial topic assignment to uniform distribution and remove empty topics.
+ * 
+ * 2012/09/28 Version 0.1
+ * 	- bug: Topic number and total word count not match in printed result
+ *  - bug: some topics are empty but not removed  
+ * 
+ * 2012/09/27 Version 0.1
+ * 	- main algorithm work. not finished all function, 
+ *  - bug: auto update hyper-parameter doesn't work well. Disable it for now.
+ *  
  * */
 
 package cc.mallet.topics;
@@ -29,8 +55,7 @@ import org.knowceans.util.Vectors;
 
 public class HDP {
 	
-	 InstanceList instances;
-	 InstanceList testIstances;
+	 private InstanceList instances;
 	 
 	 private int currentIter;
 	 
@@ -62,7 +87,7 @@ public class HDP {
 	 private List<Integer>[] nmk;
 	 private List<int[]> nkt;
 	 private List<Integer> nk;
-	 private double[][] phi;
+	
 	 private int[][] z; //topic indicator
 	 private double[] pp; //topic distribution
 	 private final int ppStep =10;
@@ -80,16 +105,18 @@ public class HDP {
 	 private boolean initialized = false;
 	 private boolean fixedK = false;
 	 private boolean fixedHyper = true;
-	 
-	 /*for inference*/
-	 
+	 private boolean showResult = true;
 	 
 	 /*set parameter*/
 	 public HDP(){
 		 this(1.0, 0.2, 1.0, 5);
 	 }
 	 
-	public HDP(double alpha, double beta, double gamma, int initialK){
+	 public HDP(HDP model){
+		  this(model.alpha, model.beta, model.gamma, model.K);
+	 }
+	 
+	 public HDP(double alpha, double beta, double gamma, int initialK){
 		 this.alpha = alpha;
 		 this.beta = beta;
 		 this.gamma = gamma;
@@ -109,6 +136,14 @@ public class HDP {
 		 if(gamma== 0){
 			 this.fixedK=true;
 		 }
+	 }
+	 
+	 /*set parameters*/
+	 public void setAlpha(double a){
+		 this.alpha=a;
+		 
+		 //once parameters changed, need to re-initialize
+		 initialized=false;
 	 }
 	 
 	 /*initialization*/
@@ -163,12 +198,13 @@ public class HDP {
 			 nk.add(0);
 			 tau.add(1.0/K);
 		 }
+		 
 		 //add one more topic
 		 tau.add(1.0/K);
 		 pp = new double[(K+ppStep)];
 		 
-		 //estimate once
-		 estimate(1, false);
+		 //initialize
+		 randomAssignTopics();
 		 
 		 if(!fixedK){
 			 updateTau();
@@ -177,12 +213,18 @@ public class HDP {
 		 initialized=true;
 	 }
 	 
-	
-
 	/*estimate*/
-	 public void estimate(int iterations, boolean printResult){
+	 public void estimate(int iterations){
+		 estimate(iterations, showResult);
+	 }
+	 
+	 private void estimate(int iterations, boolean printResult){
 		 
 		 for(int iter=0; iter < iterations ; iter++){
+			 
+			 if(!initialized){
+				 throw new IllegalStateException("Initialize HDP first!");
+			 }
 			 
 			 for(int i=0 ; i < numDocuments ; i++){		 
 				 updateDocs(i);
@@ -198,8 +240,12 @@ public class HDP {
 				 
 			 //print current status
 			 if( iter !=0 && (iter % 50) == 0){ 
-				 System.out.println("Iteration=" + iter +"\tTopic=" + (K-1) );
-				 
+				 if(!fixedK){
+					 System.out.println("Iteration=" + iter +"\tTopic=" + K );
+				 }
+				 else{
+					 System.out.print(iter + " ");
+				 }
 				 if(!fixedHyper){
 					 printParameter();
 				 }
@@ -217,6 +263,52 @@ public class HDP {
 			 printTopWord(topWordNum);
 		}
 		 
+	 }
+	 
+	 /*random initialize topics at first*/
+	 private void randomAssignTopics(){
+		 
+		 //uniform multinomial distribution for initial assignment
+		 for(int kk=0; kk<K ; kk++){	 
+			 //equal probability for each topic
+			 pp[kk] = 1.0/K;
+		 }
+		 
+		 for(int m=0 ; m < numDocuments ; m++){		 
+			 
+			 FeatureSequence fs = (FeatureSequence) instances.get(m).getData();
+			 int seqLen = fs.getLength();
+			 int type, token, k;
+			 double sum;
+			 
+			 for(token=0 ; token < seqLen ; token++){
+				 
+				 type = fs.getIndexAtPosition(token);
+				 
+				 int u = rand.nextInt(K);
+				 //assign topics
+				 k = kactive.get(u);
+				 z[m][token]=k;
+				 //add z back
+				 nmk[m].set(k, nmk[m].get(k)+1);
+				 nkt.get(k)[type]++;
+				 nk.set(k, nk.get(k)+1);
+			 }
+		 }
+		 
+		 //remove empty topic if topic number are not fixed
+		 if(!fixedK){
+			 for(int k=0 ; k<nk.size(); k++)
+			 {
+				 if(nk.get(k)==0){
+					 kactive.remove((Integer)k);
+					 kgaps.add(k);
+					 assert(Vectors.sum(nkt.get(k))==0);
+					 K--;
+					 updateTau();
+				 }
+			 }
+		 }
 	 }
 	 
 	 private void updateDocs(int m) {
@@ -249,6 +341,7 @@ public class HDP {
 				 
 				 sum+=pp[kk];
 			 }
+			 
 			 if(!fixedK){
 				 pp[K] = alpha * tau.get(K) / numTypes;
 				 sum+=pp[K];
@@ -284,7 +377,8 @@ public class HDP {
 			 }
 			 
 			 //disable empty topic
-			 if(initialized && nk.get(kold)==0){
+			 if(initialized && !fixedK && nk.get(kold)==0)
+			 {
 				 kactive.remove((Integer)kold);
 				 kgaps.add(kold);
 				 assert(Vectors.sum(nkt.get(kold))==0 && 
@@ -297,6 +391,7 @@ public class HDP {
 		 }
 	 }
 
+	/*auto update hyper parameter need refine*/
 	private void updateHyper(){
 		for(int r=0 ; r<parameterSampleNum ; r++){
 			
@@ -403,21 +498,19 @@ public class HDP {
 	 /*print*/
 	 public void printTopWord(int numWords){
 		 
-		//trimTopics();
-		
-		//int[] ak = (int[]) ArrayUtils.asPrimitiveArray(nk);
-		//Arrays.sort(ak);
+		//sort topic from largest to smallest 
+		trimTopics();
 		
 		int wordCount=0;
 		
-		for(int k=0 ; k<(K-1); k++){
-			
-			int kk=kactive.get(k);
-			
-			if(nk.get(kk)!=0){
+		for(int k=0 ; k<nk.size(); k++){
+				
+			if(nk.get(k)!=0){
+				
+				int count=nk.get(k);
 				
 				//check word count
-				wordCount+=nk.get(kk);
+				wordCount+=count;
 				
 				IDSorter[] sortedTypes = new IDSorter[numTypes];
 				//sort word in topic k
@@ -429,9 +522,12 @@ public class HDP {
 			
 				Alphabet alphabet = instances.getDataAlphabet();
 				StringBuffer out = new StringBuffer();
-				out.append("topic"+kk + ": ");
-				out.append("word:"+ nk.get(kk) + ", ");
-				double prop = (double)nk.get(kk)/totalWord;
+				out.append("topic"+k + ": ");
+				out.append("word:"+ count + ", ");
+				if(k< kactive.size()){
+					out.append("matched topic "+kactive.get(k) + ", ");
+				}
+				double prop = (double)count/totalWord;
 				out.append(String.format("prop:%2.4f, ", prop));
 			
 				for (int i=0; i<numWords; i++) {
@@ -440,13 +536,17 @@ public class HDP {
 				System.out.println(out);
 			}
 			else{
-				System.out.println("Topic"+kk+": "+"empty" );
+				if(k < kactive.size() )
+					System.out.println("Topic"+k+": matched topic " + kactive.get(k));
+				else
+					System.out.println("Topic"+k+": empty");
 			}
 		}
 		System.out.println("Total Word count: "+ wordCount );
 	 }
 	 
-	 public void printTopWord2(int numWords){
+	 /*this is just used for test & debug*/
+	 public void printTopWordTest(int numWords){
 		 
 			//trimTopics();
 			
@@ -455,7 +555,7 @@ public class HDP {
 			
 			int wordCount=0;
 			
-			for(int k=0 ; k<(K-1); k++){
+			for(int k=0 ; k<nk.size(); k++){
 					
 				if(nk.get(k)!=0){
 					
@@ -473,6 +573,9 @@ public class HDP {
 					Alphabet alphabet = instances.getDataAlphabet();
 					StringBuffer out = new StringBuffer();
 					out.append("topic"+k + ": ");
+					if(k< kactive.size()){
+						out.append("matched topic "+kactive.get(k) + ", ");
+					}
 					out.append("word:"+ nk.get(k) + ", ");
 					double prop = (double)nk.get(k)/totalWord;
 					out.append(String.format("prop:%2.4f, ", prop));
@@ -483,7 +586,10 @@ public class HDP {
 					System.out.println(out);
 				}
 				else{
-					System.out.println("Topic"+k+": "+"empty" );
+					if(k < kactive.size() )
+						System.out.println("Topic"+k+": matched topic " + kactive.get(k));
+					else
+						System.out.println("Topic"+k+": empty");
 				}
 			}
 			System.out.println("Total Word count: "+ wordCount );
@@ -491,14 +597,14 @@ public class HDP {
 	 
 	 public void printParameter(){
 		 
-		 String out = String.format("Summary: Docs=%d, topics=%d, totalWords=%d, alpha=%2.3f, beta=%2.3f, gamma=%2.3f",numDocuments, (K-1),totalWord, alpha, beta, gamma);
+		 String out = String.format("Summary: Docs=%d, topics=%d, totalWords=%d, alpha=%2.3f, beta=%2.3f, gamma=%2.3f",numDocuments, K,totalWord, alpha, beta, gamma);
 		 System.out.println(out);
 	 
 	 }
 	 
-	 public void trimTopics(){
+	 private void trimTopics(){
 		 
-		 System.out.println("start trim");
+		 //System.out.println("start trim");
 		 
 		 int[] new_nk = IndexQuickSort.sort(nk);
 		 IndexQuickSort.reverse(new_nk);
@@ -536,14 +642,96 @@ public class HDP {
 			 }
 		 }
 		 
-		 System.out.println("end trim");
 	 }
 	 
-	 /*preplexity*/
-	 public double getPreplexity(){
-		 
-		 double preplexity=0.0;
-		 
-		 return preplexity;
+	 private void exportTopWords(String outFileName){
+		 //TODO
 	 }
+	 
+	 private void exportTopicDistribution(String outFileName){
+		 //TODO
+	 }
+	 
+     public double[] topicDistribution(int m){
+		 
+		 if(m >= numDocuments){
+			 throw new ArrayIndexOutOfBoundsException();
+		 }
+		 
+		 double[] distr = new double[K];
+		 double alphaSum = K * alpha;
+		 int totalCount=0;
+		 for(int k=0; k<K ;k++){
+			 totalCount+=nmk[m].get(k);
+		 }
+		 
+		 
+		 for(int k=0 ; k<K ; k++){
+			 //distr[k] = (alpha + nmk[m].get(k))/(alphaSum + totalCount);
+			 distr[k] = nmk[m].get(k);
+		 }
+		 
+		 return distr;
+	 }
+	 
+	 /*n-fold cross validation*/
+	 public void runCrossValidation(int nfolds, int iterations){
+		 
+		 InstanceList.CrossValidationIterator iter = instances.crossValidationIterator(nfolds);
+		 double[] prepResult = new  double[nfolds];
+		 InstanceList[] splitedList;
+		 InstanceList trainList, testList;
+		 
+		 int fold=0;
+		 while(iter.hasNext()){
+			 splitedList = iter.next();
+			 trainList = splitedList[0];
+			 testList = splitedList[1];
+			 
+			 HDP model = new HDP(this);
+			 model.initialize(trainList);
+			 model.printParameter();
+			 model.estimate(iterations, false);
+			 HDPInferencer infer = model.getInferencer();
+			 infer.setInstance(testList);
+			 infer.estimate(iterations);
+			 prepResult[fold] = infer.getPreplexity();
+			 //System.out.println("n="+fold+", preplexity="+prepResult[fold]);
+			 fold++;
+			 System.out.println();
+		 }
+		 
+		 //print result
+		 double sum=0.0;
+		 for(int i=0; i< nfolds ; i++){
+			 System.out.println("n="+i+", preplexity="+prepResult[i]);
+			 sum+=prepResult[i];
+		 }
+		 System.out.println("CV result: average preplexity=" + (sum/nfolds));
+	 }
+	 
+	 /*Inferencer*/
+	 public HDPInferencer getInferencer(){
+		 
+		 if(!initialized){
+			 throw new IllegalStateException("HDP model is not iniitalized.");
+		 }
+		 
+		 //get phi
+		 double[][] phi = new double[K][numTypes];
+		 for(int kk=0 ; kk<K ; kk++){
+			 //int k = kactive.get(kk);
+			 for(int t=0 ; t < numTypes ; t++){
+				 phi[kk][t]=(nkt.get(kk)[t]+beta) / (nk.get(kk)+ numTypes*beta);
+			 }
+		 }
+		 
+		 return new HDPInferencer(alpha, K, phi, instances.getDataAlphabet(), rand);
+	 }
+
+	 /*display result or not*/
+	 public void showResult(boolean b){
+		 this.showResult=b;
+	 }
+	
 }
