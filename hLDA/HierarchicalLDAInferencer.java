@@ -1,3 +1,5 @@
+package cc.mallet.topics;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.io.*;
@@ -11,7 +13,7 @@ import gnu.trove.*;
 
 public class HierarchicalLDAInferencer {
 	
-	NCRPNode rootNode;
+	private NCRPNode rootNode;
 	int numWordsToDisplay=25;
 
 	//global variable
@@ -40,8 +42,8 @@ public class HierarchicalLDAInferencer {
 	Randoms random;
 	
 	
-	HierarchicalLDAInferencer(HierarchicalLDA hLDA){
-		this.rootNode = hLDA.rootNode;
+	public HierarchicalLDAInferencer(HierarchicalLDA hLDA){
+		this.setRootNode(hLDA.rootNode);
 		this.numLevels = hLDA.numLevels;
 		this.numDocuments = hLDA.numDocuments;
 		this.numTypes = hLDA.numTypes;
@@ -60,7 +62,7 @@ public class HierarchicalLDAInferencer {
 	public StringBuffer getSampledDistribution(Instance instance, int numIterations,
 			   int thinning, int burnIn) {
 		
-		//chceck instance
+		//check instance
 		if (! (instance.getData() instanceof FeatureSequence)) {
 			throw new IllegalArgumentException("Input must be a FeatureSequence");
 		}		
@@ -74,7 +76,7 @@ public class HierarchicalLDAInferencer {
 		
 	    //initialize
 		//1.generate path
-		path[0] = rootNode;
+		path[0] = getRootNode();
 		for (int level = 1; level < numLevels; level++) {
 			path[level] = path[level-1].selectExisting();
 		}
@@ -121,7 +123,7 @@ public class HierarchicalLDAInferencer {
 	     TObjectDoubleHashMap<NCRPNode> nodeWeights = new TObjectDoubleHashMap<NCRPNode>();
 	 	
 	 	 // Calculate p(c_m | c_{-m})
-	 	 calculateNCRP(nodeWeights, rootNode, 0.0); 
+	 	 calculateNCRP(nodeWeights, getRootNode(), 0.0); 
 	 	 
 	 	TIntIntHashMap[] typeCounts = new TIntIntHashMap[numLevels];
 	 	int[] docLevels;
@@ -172,7 +174,7 @@ public class HierarchicalLDAInferencer {
 			//if (iteration > 1) { System.out.println(newTopicWeights[level]); }
 		}
 	    
-		calculateWordLikelihood(nodeWeights, rootNode, 0.0, typeCounts, newTopicWeights, 0);
+		calculateWordLikelihood(nodeWeights, getRootNode(), 0.0, typeCounts, newTopicWeights, 0);
 		
 		NCRPNode[] nodes = nodeWeights.keys(new NCRPNode[] {});
 		double[] weights = new double[nodes.length];
@@ -506,4 +508,13 @@ public class HierarchicalLDAInferencer {
 		}
 		 
 	 }
+
+	public NCRPNode getRootNode() {
+		return rootNode;
+	}
+
+	public void setRootNode(NCRPNode rootNode) {
+		this.rootNode = rootNode;
+	}
 }//end class
+

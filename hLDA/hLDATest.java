@@ -49,14 +49,14 @@ public class hLDATest {
 		
 		HierarchicalLDAInferencer inferencer = new HierarchicalLDAInferencer(model);
 		
-		inferencer.printNode(inferencer.rootNode, 0);
+		inferencer.printNode(inferencer.getRootNode(), 0);
 		
 		try{
 	       // print tree structure 
 		   //FileWriter fstream = new FileWriter("raw-hlda-3level-topicTree_eta07.csv");
 		   FileWriter fstream = new FileWriter("output.csv");
 		   BufferedWriter out = new BufferedWriter(fstream);
-		   inferencer.printNodeTofile(inferencer.rootNode, 0, out);
+		   inferencer.printNodeTofile(inferencer.getRootNode(), 0, out);
 				
 		   //Close the output stream
 		   out.close();
