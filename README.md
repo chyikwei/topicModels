@@ -3,17 +3,18 @@ So I tried to implement some useful topic modeling method on it:<br />
  * Hierarchical Dirichlet Process
  * inference part for hLDA
 
-Note:
+Usage:
 
-1. It a extension for Mallet, so you need to include them in Mallet's source code.<br  />
-2. You will also need the "knowceans" package.<br  />
-3. For HDP, The source code I got is for the paper "Implementing the HDP with minimum code complexity" by Gregor Heinrich<br /> 
-4. files in the "data" floder is used for testing.<br  />
+1. This is an extension for Mallet, so you need to have Mallet's source code first.<br  />
+2. put <code>HDP.java</code>,<code>HDPInferencer.java</code> and <code>HierarchicalLDAInferencer.java</code> in <code>src/cc/mallet/topics</code> folder.
+3. If you are going to run HDP, make sure you have <code>knowceans</code> package.<br  />
+4. run <code>HDPTest.java</code> or <code>hLDATest.java</code> will give you a demo for a small dataset in <code>data</code> folder.
 
-Also, you can find all you need in the following reference:
+References:
  * Mallet: http://mallet.cs.umass.edu/
  * knowceans: http://sourceforge.net/projects/knowceans/
  * HDP paper: http://www.cs.berkeley.edu/~jordan/papers/hdp.pdf
+ * HDP paper & source code: "Implementing the HDP with minimum code complexity" by Gregor Heinrich
 
 --------------
 
