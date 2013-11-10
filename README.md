@@ -1,40 +1,39 @@
-In current Mallet package, it only contains two topic Models--LDA and Hierachical LDA.<br />
-So I tried to implement some useful topic modeling method on it:<br />
- * Hierarchical Dirichlet Process
- * inference part for hLDA
+1. Mallet Extension
+-------------------
+In Mallet package, it only contains two topic Models--LDA and Hierachical LDA. 
+So I tried to implement some useful topic modeling method on it.<br/>
 
-Usage:
+__Model:__
+ *  Hierarchical Dirichlet Process with Gibbs Sampling. (in <code>HDP</code> folder)
+ *  Inference part for hLDA. (in <code>hLDA</code> folder)
 
-1. This is an extension for Mallet, so you need to have Mallet's source code first.<br  />
+__Usage:__ 
+
+1. This is an extension for Mallet, so you need to have Mallet's source code first.
 2. put <code>HDP.java</code>,<code>HDPInferencer.java</code> and <code>HierarchicalLDAInferencer.java</code> in <code>src/cc/mallet/topics</code> folder.
-3. If you are going to run HDP, make sure you have <code>knowceans</code> package.<br  />
+3. If you are going to run HDP, make sure you include <code>knowceans</code> package in your project.
 4. run <code>HDPTest.java</code> or <code>hLDATest.java</code> will give you a demo for a small dataset in <code>data</code> folder.
 
-References:
+__References:__
  * Mallet: http://mallet.cs.umass.edu/
  * knowceans: http://sourceforge.net/projects/knowceans/
  * HDP paper: http://www.cs.berkeley.edu/~jordan/papers/hdp.pdf
  * HDP paper & source code: "Implementing the HDP with minimum code complexity" by Gregor Heinrich
 
---------------
 
-Update History:
+2. Scikit-learn Extension
+-------------------------
+Scikit-learn doesn't have any topic models yet, so I modified Matthew D. Hoffman's onlineldavb into scikit-learn format.<br />
 
- >2012/10/01 version 0.1
- >- bug fix: print correct topic number in training
- >- add cross validation in HDP
- >- add inferencer class
- >- add preplexity calculation in inferencer
- 
- >2012/09/29 Version 0.1
- >- bug fix: printed result are correct now
- >- bug fix: empty topic are caused by initial topic number > 0
- >- change initial topic assignment to uniform distribution and remove empty topics. 
- 
- >2012/09/28 Version 0.1
- >- bug: Topic number and total word count not match in printed result
- >- bug: some topics are empty but not removed  
- 
- >2012/09/27 Version 0.1
- >- main algorithm work. not finished all function, 
- >- bug: auto update hyper-parameter doesn't work well. Disable it for now.
+__Model__:
+ * online LDA with variational EM. (In <code>LDA</code> folder)
+
+__Usage__:
+
+1. Install Python <scikit-learn> package.
+2. Run <code>python lda_example.py</code> will give you an example with 20 News Group dataset. 
+
+__Reference:__
+ * Scikit-learn: http://scikit-learn.org
+ * onlineLDA: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
+ * online LDA paper: http://www.cs.princeton.edu/~blei/papers/HoffmanBleiBach2010b.pdf
