@@ -1,8 +1,15 @@
-"""Latent Dirichlet Allocation with variational inference"""
-# Note: This implementation is modified from Matthew D. Hoffman's onlineldavb
-# Link: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
+"""
 
-# Author: Chyi-Kwei Yau
+======================================================
+Latent Dirichlet Allocation with variational inference
+======================================================
+
+This implementation is modified from Matthew D. Hoffman's onlineldavb
+Link: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
+"""
+
+# Authors: Matthew D. Hoffman
+#          Chyi-Kwei Yau
 
 
 import numpy as np
@@ -121,7 +128,7 @@ class LDA(BaseEstimator, TransformerMixin):
 
     eta: float
         Hyperparameter for prior on topics beta
-    
+
     kappa: float
         Learning Rate
 
@@ -170,8 +177,9 @@ class LDA(BaseEstimator, TransformerMixin):
         else:
             # parell setting
             results = Parallel(n_jobs=self.n_jobs, verbose=0)(
-                delayed(_update_gamma)(sub_X, self.expElogbeta, self.alpha, self.rng, 100, self.meanchangethresh, cal_delta)
-                    for sub_X in _split_sparse(X, self.n_jobs))
+                delayed(_update_gamma)(sub_X, self.expElogbeta, self.alpha,
+                                       self.rng, 100, self.meanchangethresh, cal_delta)
+                for sub_X in _split_sparse(X, self.n_jobs))
             gammas, deltas = zip(*results)
             gamma = np.vstack(gammas)
             if cal_delta:
@@ -193,7 +201,7 @@ class LDA(BaseEstimator, TransformerMixin):
     def _m_step(self, delta_component, total_docs, n_docs):
         # TODO: check params
         rhot = pow(self.tau + self.updatecnt, -self.kappa)
-        #print "rhot", rhot
+        # print "rhot", rhot
 
         self.components_ = ((1 - rhot) * self.components_) + \
             (rhot * (self.eta + self.total_docs * delta_component / n_docs))
@@ -250,8 +258,6 @@ class LDA(BaseEstimator, TransformerMixin):
         gamma, delta_component = self._e_step(X)
         self._m_step(delta_component, self.total_docs, n_docs)
 
-        # TODO: add partial transform
-
         if normalize:
             gamma /= gamma.sum(axis=1)[:, np.newaxis]
 
@@ -299,7 +305,7 @@ class LDA(BaseEstimator, TransformerMixin):
                 _bound * X.shape[0]) / (self.total_docs * sum(X.data))
             if verbose:
                 print 'iteration', i, 'bound', _perwordbound
-        
+
             if i > 0 and abs(_last_bound - _perwordbound) < tol:
                 break
 
@@ -346,10 +352,10 @@ class LDA(BaseEstimator, TransformerMixin):
         Parameters
         ----------
         X: sparse matrix, [n_docs, n_vocabs]
-        
+
         gamma: array, shape = [n_docs, n_topics]
-            document distribution (ca be either normalized & un-normalized)
-        
+            document distribution (can be either normalized & un-normalized)
+
         Returns
         -------
         score: float, score of gamma
