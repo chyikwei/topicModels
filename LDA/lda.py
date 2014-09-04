@@ -41,24 +41,26 @@ def _split_sparse(X, n_fold):
         yield X
 
     n_rows, n_cols = X.shape
-    fold_size = int(math.ceil(float(n_rows) / n_fold))
+    fold_size = n_rows / n_fold
+    mod = n_rows % n_fold
+    fold_sizes = np.repeat(fold_size, n_fold)
+    fold_sizes[:mod] += 1
+
     X_indptr = X.indptr
     X_indices = X.indices
     X_data = X.data
 
-    fold = 0
-    while fold < n_fold:
-        start_index = fold * fold_size
-        end_index = min((fold + 1) * fold_size, n_rows) - 1
+    end_index = 0
+    for fold_size in fold_sizes:
+        start_index = end_index
+        end_index = start_index + fold_size
 
-        indptr = X_indptr[start_index:end_index + 2] - X_indptr[start_index]
-        indices = X_indices[X_indptr[start_index]:X_indptr[end_index + 1]]
-        data = X_data[X_indptr[start_index]:X_indptr[end_index + 1]]
+        indptr = X_indptr[start_index:end_index + 1] - X_indptr[start_index]
+        indices = X_indices[X_indptr[start_index]:X_indptr[end_index]]
+        data = X_data[X_indptr[start_index]:X_indptr[end_index]]
         shape = (len(indptr) - 1, n_cols)
 
         yield sp.csr_matrix((data, indices, indptr), shape=shape)
-
-        fold += 1
 
 
 def _update_gamma(X, expElogbeta, alpha, rng, max_iters, meanchangethresh, cal_delta):

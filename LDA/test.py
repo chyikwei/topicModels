@@ -1,22 +1,31 @@
 import numpy as np
 import scipy.sparse as sp
 
-from .lda import _split_sparse, LDA
+from sklearn.utils.testing import assert_true
+from sklearn.utils.testing import assert_false
+from sklearn.utils.testing import raises
+from sklearn.utils.testing import assert_array_almost_equal
+from sklearn.utils.testing import assert_greater
+from sklearn.utils.testing import assert_less
 
+from lda import _split_sparse, LDA
+
+random_state = np.random.mtrand.RandomState(0)
 
 def test_split_sparse():
-    # TODO: complete test
-    indptr = np.array([0, 2, 3, 6, 8, 10])
-    indices = np.array([0, 2, 2, 0, 1, 2, 0, 1, 1, 2])
-    data = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    X = sp.csr_matrix((data, indices, indptr), shape=(5, 3))
+    n_row = random_state.randint(20, 40)
+    n_col = random_state.randint(3, 6)
+    n_fold = random_state.randint(3, 8)
+    max_fold_size = int(np.ceil(float(n_row) / n_fold))
 
-    for a, b, c, d in _split_sparse(X, 2):
-        print 'len', len(a) - 1
-        print a, b, c, d
+    X = random_state.randint(0, 2, (n_row, n_col))
+    X = sp.csr_matrix(X)
+    for part in _split_sparse(X, n_fold):
+        assert_true(part.shape[0] <= max_fold_size)
+        assert_true(part.shape[1] == n_col)
 
 
-def lda_test():
+def lda_example():
     # TODO: complete test
     from sklearn.feature_extraction.text import CountVectorizer
 
@@ -56,3 +65,8 @@ def lda_test():
         print("Topic #%d:" % topic_idx)
         print(" ".join([feature_names[i]
                         for i in topic.argsort()[:-n_top_words - 1:-1]]))
+
+
+if __name__ == '__main__':
+    import nose
+    nose.run(argv=['', __file__])
