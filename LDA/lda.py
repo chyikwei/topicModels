@@ -31,20 +31,21 @@ def _dirichlet_expectation(alpha):
     return(psi(alpha) - psi(np.sum(alpha, 1))[:, np.newaxis])
 
 
-def _split_sparse(X, n_fold):
+# functions for split sparse matrix
+def _split_sparse(X, fold_sizes):
     """
     split sparse matrix by row
     return a new csr_matrix
+
+    parameters
+    ----------
+    X: parse matrix
+
+    batch_sizes: 1-D array, the size of each fold
+
     """
-    if n_fold <= 1:
-        yield X
 
-    n_rows, n_cols = X.shape
-    fold_size = n_rows / n_fold
-    mod = n_rows % n_fold
-    fold_sizes = np.repeat(fold_size, n_fold)
-    fold_sizes[:mod] += 1
-
+    n_cols = X.shape[1]
     X_indptr = X.indptr
     X_indices = X.indices
     X_data = X.data
@@ -62,7 +63,43 @@ def _split_sparse(X, n_fold):
         yield sp.csr_matrix((data, indices, indptr), shape=shape)
 
 
-def _update_gamma(X, expElogbeta, alpha, rng, max_iters, meanchangethresh, cal_delta):
+def _n_fold_split(X, n_fold):
+    """
+    split sparse matrix X into n fold
+    """
+
+    if n_fold <= 1:
+        return X
+    n_rows, n_cols = X.shape
+    fold_size = n_rows / n_fold
+    mod = n_rows % n_fold
+    fold_sizes = np.repeat(fold_size, n_fold)
+    fold_sizes[:mod] += 1
+
+    return _split_sparse(X, fold_sizes)
+
+
+def _min_batch_split(X, batch_size):
+    """
+    split sparse matrix X by batch_size
+    """
+    fold_num = X.shape[0] / batch_size
+    last_fold_size = X.shape[0] % batch_size
+    if last_fold_size > 0:
+        fold_sizes = np.repeat(batch_size, fold_num + 1)
+        fold_sizes[-1] = last_fold_size
+    else:
+        fold_sizes = np.repeat(batch_size, fold_num)
+
+    return _split_sparse(X, fold_sizes)
+
+
+def _update_gamma(X, expElogbeta, alpha, rng, max_iters,
+                  meanchangethresh, cal_delta):
+    """
+    E-step: update latent variable gamma
+    """
+
     n_docs, n_vocabs = X.shape
     n_topics = expElogbeta.shape[0]
 
@@ -76,7 +113,7 @@ def _update_gamma(X, expElogbeta, alpha, rng, max_iters, meanchangethresh, cal_d
     X_indices = X.indices
     X_indptr = X.indptr
 
-    for d in range(n_docs):
+    for d in xrange(n_docs):
         ids = X_indices[X_indptr[d]:X_indptr[d + 1]]
         cnts = X_data[X_indptr[d]:X_indptr[d + 1]]
         gammad = gamma[d, :]
@@ -87,7 +124,7 @@ def _update_gamma(X, expElogbeta, alpha, rng, max_iters, meanchangethresh, cal_d
         phinorm = np.dot(expElogthetad, expElogbetad) + 1e-100
 
         # Iterate between gamma and phi until convergence
-        for it in range(0, max_iters):
+        for it in xrange(0, max_iters):
             lastgamma = gammad
             # We represent phi implicitly to save memory and time.
             # Substituting the value of the optimal phi back into
@@ -129,20 +166,27 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         number of topics.
 
     alpha: float, optional (defalut: 0.1)
-        Hyperparameter for prior on weight vectors theta. In general, it is 1 / n_topics.
+        Hyperparameter for prior on weight vectors theta. In general, it is `1 / n_topics`.
 
     eta: float, optional (default: 0.1)
-        Hyperparameter for prior on topics beta. In general, it is 1 / n_topics.
+        Hyperparameter for prior on topics beta. In general, it is `1 / n_topics`.
 
     kappa: float, optional (default: 0.7)
-        Learning rate: exponential decay rate. tt hould be between (0.5, 1.0]
-        to guarantee asymptotic convergence.
+        weight for _component: it controls the weight for previous value of _component.
+        The value hould be between (0.5, 1.0] to guarantee asymptotic convergence for online learning.
+        It is only used in partial_fit.
+        When we set kappa to 0.0 and batch_size to n_docs, then the udpate is batch VB.
 
     tau: float, optional (default: 1024.)
-        A (positive) learning parameter that downweights early iterations. It should be greater than 1.0
+        A (positive) learning parameter that downweights early iterations. It should be greater than 1.0.
+        It is only used in partial_fit
 
     n_docs: int, optional (default: 1e6)
-        Total umber of document. It is only used in online learing. In batch learning, n_docs is X.shape[0]
+        Total umber of document. It is only used in online learing(partial_fit).
+        In batch learning, n_docs is X.shape[0]
+
+    batch_size: int, optional (default: 128)
+        Number of document to udpate in each EM-step
 
     normalize_doc: boolean, optional (default: True)
         normalize the topic distribution for transformed document or not.
@@ -174,12 +218,12 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         vocab distribution for each topic. components_[i, j] represents
         vocab `j` in topic `i`
 
-    updatecnt: int
-        track the count of iterations
+    n_iter_: int
+        number of iteration
 
     """
 
-    def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1024.,
+    def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1000.,
                  n_docs=1e6, normalize_doc=True, e_step_tol=1e-3, pre_tol=1e-2,
                  mean_change_tol=1e-3, n_jobs=1, verbose=0, random_state=None):
         self.n_topics = n_topics
@@ -194,29 +238,41 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         self.meanchangethresh = mean_change_tol
         self.n_jobs = n_jobs
         self.verbose = verbose
-        self.updatecnt = 0
         self.random_state = random_state
         self.rng = check_random_state(random_state)
+        self.n_iter_ = 1
 
-    def _e_step(self, X, cal_delta=True):
+    def _init_latent_vars(self, n_vocabs):
+        self.n_vocabs = n_vocabs
+        init_gamma = 100.
+        init_var = 1. / init_gamma
+        self.components_ = self.rng.gamma(
+            init_gamma, init_var, (self.n_topics, n_vocabs))
+
+        self.Elogbeta = _dirichlet_expectation(self.components_)
+        self.expElogbeta = np.exp(self.Elogbeta)
+
+    def _e_step(self, X, cal_delta):
         """
         E-step
 
-        set `cal_delta == True` when we need to update _component
+        set `cal_delta == True` when we need to run _m_step
         for inference, set it to False
         """
 
         if self.n_jobs == 1:
             gamma, delta_component = _update_gamma(
-                X, self.expElogbeta, self.alpha, self.rng, 100, self.meanchangethresh, cal_delta)
+                X, self.expElogbeta, self.alpha, self.rng,
+                100, self.meanchangethresh, cal_delta)
 
         else:
             # parell run e-step
             results = Parallel(n_jobs=self.n_jobs, verbose=0)(
                 delayed(_update_gamma)
-                    (sub_X, self.expElogbeta, self.alpha,
-                        self.rng, 100, self.meanchangethresh, cal_delta)
-                            for sub_X in _split_sparse(X, self.n_jobs))
+                (sub_X, self.expElogbeta, self.alpha,
+                 self.rng, 100, self.meanchangethresh, cal_delta)
+                for sub_X in _split_sparse(X, self.n_jobs))
+
             # merge result
             gammas, deltas = zip(*results)
             gamma = np.vstack(gammas)
@@ -237,19 +293,36 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return (gamma, delta_component)
 
-    def _m_step(self, delta_component, total_docs, n_docs):
+    def _em_step(self, X, batch_update):
         """
-        M-step: update components_
-        """
-        rhot = pow(self.tau + self.updatecnt, -self.kappa)
-        # print "rhot", rhot
+        EM update for 1 iteration
 
-        self.components_ = ((1 - rhot) * self.components_) + \
-            (rhot * (self.eta + self.total_docs * delta_component / n_docs))
+        parameters
+        ----------
+        X:  sparse matrix
+
+        batch_update: boolean
+        update `_component` by bath VB or online VB
+        """
+        # e-step
+        gamma, delta_component = self._e_step(X, cal_delta=True)
+
+        # m-step
+        if batch_update:
+            self.components_ = self.eta + delta_component
+        else:
+            # online update
+            rhot = np.power(self.tau + self._n_iter_, -self.kappa)
+            doc_ratio = float(total_docs) / X.shape[0]
+            self.components_ *= (1 - rhot)
+            self.components_ += (rhot *
+                                 (self.eta + doc_ratio * delta_component))
 
         self.Elogbeta = _dirichlet_expectation(self.components_)
         self.expElogbeta = np.exp(self.Elogbeta)
-        self.updatecnt += 1
+        self.n_iter_ += 1
+
+        return gamma
 
     def _to_csr(self, X):
         """
@@ -264,6 +337,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
     def fit_transform(self, X):
         """
         Learn a model for X and returns the transformed data
+
         Parameters
         ----------
         X: array or sparse matrix, shape = [n_docs, n_vocabs]
@@ -280,14 +354,13 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             Topic distribution for each doc
         """
 
+        """
         X = self._to_csr(X)
         n_docs, n_vocabs = X.shape
 
         if not hasattr(self, 'components_'):
             # initialize vocabulary & latent variables
-            self.n_vocabs = n_vocabs
-            self.components_ = self.rng.gamma(
-                100., 1. / 100., (self.n_topics, n_vocabs))
+
             self.Elogbeta = _dirichlet_expectation(self.components_)
             self.expElogbeta = np.exp(self.Elogbeta)
         else:
@@ -297,16 +370,20 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         # EM update
         gamma, delta_component = self._e_step(X)
-        self._m_step(delta_component, self.total_docs, n_docs)
+        # self._m_step(delta_component, self.n_docs, n_docs)
+        self._m_step(delta_component, self.n_docs, n_docs)
 
         if self.normalize_doc:
             gamma /= gamma.sum(axis=1)[:, np.newaxis]
 
         return gamma
+        """
+        X = self._to_csr(X)
+        return self.fit(X).transform(X)
 
     def partial_fit(self, X):
         """
-        learn model from X
+        Online Learning with Min-Batch update
 
         Parameters
         ----------
@@ -317,13 +394,25 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         -------
         self
         """
+
         X = self._to_csr(X)
-        # TODO: modified tottal doc size
-        #self.total_docs += X.shape[1]
-        self.fit_transform(X, normalize=False, partial=True)
+        n_docs, n_vocabs = X.shape
+        batch_size = self.batch_size
+
+        # initialize parameters or check
+        if not self._component:
+            self._init_latent_vars(n_vocabs)
+
+        if n_vocabs != self.n_vocabs:
+            raise ValueError(
+                "feature dimension(vocabulary size) doesn't match.")
+
+        for batch_X in _min_batch_split(X, batch_size):
+            self._em_step(X, batch_update=False)
+
         return self
 
-    def fit(self, X, max_iters=20, tol=1e-2):
+    def fit(self, X, max_iters=20):
         """
         Learn model from X. This function is for batch learning.
         So it will override the old _component variables
@@ -336,9 +425,6 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         max_iters: int, (default: 20)
             Max number of iterations
 
-        tol: float, (default: 1e-2)
-            Tolerance
-
         verbose: booelan, (default: False)
             print in each iteration or not
 
@@ -347,24 +433,29 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         self
         """
         X = self._to_csr(X)
-        _last_bound = None
+        n_docs, n_vocabs = X.shape
+
+        # initialize parameters
+        self._init_latent_vars(n_vocabs)
+
+        # change to preplexity later
+        last_bound = None
         for i in xrange(max_iters):
-            gamma = self.fit_transform(X, normalize=False)
+            gamma = self._em_step(X, batch_update=True)
+
             # check approx bound
-            _bound = self.approx_bound(X, gamma)
-            _perwordbound = (
-                _bound * X.shape[0]) / (self.total_docs * sum(X.data))
+            bound = self.approx_bound(X, gamma)
+            perwordbound = bound / np.sum(X.data)
             if self.verbose:
-                print 'iteration', i, 'bound', _perwordbound
+                print 'iteration', i, 'bound', perwordbound
 
-            if i > 0 and abs(_last_bound - _perwordbound) < tol:
+            if i > 0 and abs(last_bound - perwordbound) < self.prex_tol:
                 break
-
-            _last_bound = _perwordbound
+            last_bound = perwordbound
 
         return self
 
-    def transform(self, X, normalize=True):
+    def transform(self, X):
         """
         Transform the data X according to the fitted model (run inference)
 
@@ -398,13 +489,16 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         gamma, _ = self._e_step(X, False)
 
-        if normalize:
+        if self.normalize_doc:
             gamma /= gamma.sum(axis=1)[:, np.newaxis]
 
         return gamma
 
     def approx_bound(self, X, gamma):
         """
+        calculate approximate bound for data X and topic distribution gamma
+
+
         Parameters
         ----------
         X: sparse matrix, [n_docs, n_vocabs]
@@ -443,7 +537,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             gammaln(self.alpha * self.n_topics) - gammaln(np.sum(gamma, 1)))
 
         # Compensate for the subsampling of the population of documents
-        score = score * self.total_docs / n_docs
+        #score = score * self.n_docs / n_docs
         # E[log p(beta | eta) - log q (beta | lambda)]
         score += np.sum((self.eta - self.components_) * self.Elogbeta)
         score += np.sum(gammaln(self.components_) - gammaln(self.eta))
