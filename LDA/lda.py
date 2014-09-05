@@ -4,13 +4,12 @@
 Latent Dirichlet Allocation with variational inference
 ======================================================
 
-This implementation is modified from Matthew D. Hoffman's onlineldavb
+This implementation is modified from Matthew D. Hoffman's onlineldavb code
 Link: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
 """
 
-# Authors: Matthew D. Hoffman
-#          Chyi-Kwei Yau
-
+# Author: Chyi-Kwei Yau
+# Author: Matthew D. Hoffman (original onlineldavb implementation)
 
 import numpy as np
 import math
@@ -110,80 +109,118 @@ def _update_gamma(X, expElogbeta, alpha, rng, max_iters, meanchangethresh, cal_d
     return (gamma, delta_component)
 
 
-class LDA(BaseEstimator, TransformerMixin):
+class onlineLDA(BaseEstimator, TransformerMixin):
 
     """
-    online Latent Dirichlet Allocation implementation with variational inference
-    Reference: 
-    "Online Learning for Latent Dirichlet Allocation", Matthew D. Hoffman, David M. Blei, Francis Bach
+    Online Latent Dirichlet Allocation implementation with variational inference
+
+    References
+    ----------
+    [1] "Online Learning for Latent Dirichlet Allocation", Matthew D. Hoffman, 
+        David M. Blei, Francis Bach
+
+    [2] Matthew D. Hoffman's onlineldavb code. Link:
+        http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
+
 
     Parameters
     ----------
-    n_topics: int
-        number of topics
+    n_topics: int, optional (default: 10)
+        number of topics.
 
-    X: sparse matrix, [n_docs, n_vocabs]
-        The data matrix to be decomposed where X[i, j] is the count of vocab `j` in document `i`
+    alpha: float, optional (defalut: 0.1)
+        Hyperparameter for prior on weight vectors theta. In general, it is 1 / n_topics.
 
-    alpha: float
-        Hyperparameter for prior on weight vectors theta
+    eta: float, optional (default: 0.1)
+        Hyperparameter for prior on topics beta. In general, it is 1 / n_topics.
 
-    eta: float
-        Hyperparameter for prior on topics beta
+    kappa: float, optional (default: 0.7)
+        Learning rate: exponential decay rate. tt hould be between (0.5, 1.0]
+        to guarantee asymptotic convergence.
 
-    kappa: float
-        Learning Rate
+    tau: float, optional (default: 1024.)
+        A (positive) learning parameter that downweights early iterations. It should be greater than 1.0
 
-    e_step_tol: double, default: 1e-4
+    n_docs: int, optional (default: 1e6)
+        Total umber of document. It is only used in online learing. In batch learning, n_docs is X.shape[0]
+
+    normalize_doc: boolean, optional (default: True)
+        normalize the topic distribution for transformed document or not.
+        if True, sum of topic distribution for each document will be 1.0
+
+    e_step_tol: float, optional (default: 1e-4)
         Tolerance value used in e-step break conditions.
 
-    prex_tol: double, default: 1e-4
+    prex_tol: float, optional (default: 1e-2)
         Tolerance value used in preplexity break conditions.
 
-    n_jobs: int, default: 1
+    mean_change_tol: float, optional (default: 1e-3)
+        Tolerance value used in e-step break conditions.
+
+    n_jobs: int, optional (default: 1)
         The number of jobs to use for the E step. this will break input matrix into
         n_jobs parts and computing them in parallel.
 
+    verbose : int, optional (default: 0)
+        Verbosity level.
+
+    random_state: int or RandomState instance or None, optional (default: None)
+        Pseudo Random Number generator seed control.
+
+
     Attributes
     ----------
-    `components_`: array, [n_topics, n_vocabs]
-        vocab distribution for each topic. components_[i, j] is the probability of
+    components_: array, [n_topics, n_vocabs]
+        vocab distribution for each topic. components_[i, j] represents
         vocab `j` in topic `i`
+
+    updatecnt: int
+        track the count of iterations
 
     """
 
-    def __init__(self, n_topics=10, alpha0=None, eta0=None, kappa=0.7,
-                 e_step_tol=1e-3, pre_tol=1e-2, tau0=1024., n_jobs=1, random_state=None):
+    def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1024.,
+                 n_docs=1e6, normalize_doc=True, e_step_tol=1e-3, pre_tol=1e-2,
+                 mean_change_tol=1e-3, n_jobs=1, verbose=0, random_state=None):
         self.n_topics = n_topics
-        self.alpha0 = alpha0
-        self.alpha = alpha0 or 1.0 / n_topics
-        self.eta0 = eta0
-        self.eta = eta0 or 1.0 / n_topics
+        self.alpha = alpha
+        self.eta = eta
+        self.kappa = kappa
+        self.tau = tau
+        self.n_docs = n_docs
+        self.normalize_doc = normalize_doc
         self.e_step_tol = e_step_tol
         self.prex_tol = pre_tol
-        self.kappa = kappa
+        self.meanchangethresh = mean_change_tol
+        self.n_jobs = n_jobs
+        self.verbose = verbose
+        self.updatecnt = 0
         self.random_state = random_state
         self.rng = check_random_state(random_state)
-        self.tau0 = tau0
-        self.tau = tau0 + 1
-        self.n_jobs = n_jobs
-        self.updatecnt = 0
-        self.total_docs = 3.3e6
-        self.meanchangethresh = 0.001
 
     def _e_step(self, X, cal_delta=True):
+        """
+        E-step
+
+        set `cal_delta == True` when we need to update _component
+        for inference, set it to False
+        """
+
         if self.n_jobs == 1:
             gamma, delta_component = _update_gamma(
                 X, self.expElogbeta, self.alpha, self.rng, 100, self.meanchangethresh, cal_delta)
 
         else:
-            # parell setting
+            # parell run e-step
             results = Parallel(n_jobs=self.n_jobs, verbose=0)(
-                delayed(_update_gamma)(sub_X, self.expElogbeta, self.alpha,
-                                       self.rng, 100, self.meanchangethresh, cal_delta)
-                for sub_X in _split_sparse(X, self.n_jobs))
+                delayed(_update_gamma)
+                    (sub_X, self.expElogbeta, self.alpha,
+                        self.rng, 100, self.meanchangethresh, cal_delta)
+                            for sub_X in _split_sparse(X, self.n_jobs))
+            # merge result
             gammas, deltas = zip(*results)
             gamma = np.vstack(gammas)
+
             if cal_delta:
                 delta_component = np.zeros(self.components_.shape)
                 for delta in deltas:
@@ -201,7 +238,9 @@ class LDA(BaseEstimator, TransformerMixin):
         return (gamma, delta_component)
 
     def _m_step(self, delta_component, total_docs, n_docs):
-        # TODO: check params
+        """
+        M-step: update components_
+        """
         rhot = pow(self.tau + self.updatecnt, -self.kappa)
         # print "rhot", rhot
 
@@ -222,7 +261,7 @@ class LDA(BaseEstimator, TransformerMixin):
 
         return X
 
-    def fit_transform(self, X, normalize=False, partial=True):
+    def fit_transform(self, X):
         """
         Learn a model for X and returns the transformed data
         Parameters
@@ -260,12 +299,12 @@ class LDA(BaseEstimator, TransformerMixin):
         gamma, delta_component = self._e_step(X)
         self._m_step(delta_component, self.total_docs, n_docs)
 
-        if normalize:
+        if self.normalize_doc:
             gamma /= gamma.sum(axis=1)[:, np.newaxis]
 
         return gamma
 
-    def partial_fit(self, X, y=None):
+    def partial_fit(self, X):
         """
         learn model from X
 
@@ -284,14 +323,24 @@ class LDA(BaseEstimator, TransformerMixin):
         self.fit_transform(X, normalize=False, partial=True)
         return self
 
-    def fit(self, X, y=None, max_iters=20, tol=1e-2, verbose=True):
+    def fit(self, X, max_iters=20, tol=1e-2):
         """
-        Learn model from X
+        Learn model from X. This function is for batch learning.
+        So it will override the old _component variables
 
         Parameters
         ----------
-        X: sparse matrix, shape = [n_docs, n_vocabs]
+        X: sparse matrix, shape = (n_docs, n_vocabs)
             Data matrix to be decomposed
+
+        max_iters: int, (default: 20)
+            Max number of iterations
+
+        tol: float, (default: 1e-2)
+            Tolerance
+
+        verbose: booelan, (default: False)
+            print in each iteration or not
 
         Returns
         -------
@@ -305,7 +354,7 @@ class LDA(BaseEstimator, TransformerMixin):
             _bound = self.approx_bound(X, gamma)
             _perwordbound = (
                 _bound * X.shape[0]) / (self.total_docs * sum(X.data))
-            if verbose:
+            if self.verbose:
                 print 'iteration', i, 'bound', _perwordbound
 
             if i > 0 and abs(_last_bound - _perwordbound) < tol:
@@ -325,11 +374,16 @@ class LDA(BaseEstimator, TransformerMixin):
             Data matrix to be transformed by the model
             n_vacabs must be the same as n_vocabs in fitted model
 
+        normalize: booelan value, (default: True)
+            If True, normalize the topic distribution for each document.
+            Sum of topic distribution will be 1.0 for every document.
+
         Returns
         -------
         data: array, [n_docs, n_topics]
             Document distribution
         """
+
         X = self._to_csr(X)
         n_docs, n_vocabs = X.shape
 
@@ -340,7 +394,7 @@ class LDA(BaseEstimator, TransformerMixin):
         # matrix
         if n_vocabs != self.n_vocabs:
             raise ValueError(
-                "feature dimension(vocabulary size) not match.")
+                "feature dimension(vocabulary size) does not match.")
 
         gamma, _ = self._e_step(X, False)
 
