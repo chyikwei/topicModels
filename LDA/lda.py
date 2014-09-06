@@ -18,8 +18,7 @@ import scipy.sparse as sp
 from sklearn.utils import check_random_state, atleast2d_or_csr
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.externals.joblib import Parallel
-from sklearn.externals.joblib import delayed
+from sklearn.externals.joblib import Parallel, delayed, cpu_count
 
 
 def _dirichlet_expectation(alpha):
@@ -65,7 +64,7 @@ def _split_sparse(X, fold_sizes):
 
 def _n_fold_split(X, n_fold):
     """
-    split sparse matrix X into n fold
+    split sparse matrix X into n-fold
     """
 
     if n_fold <= 1:
@@ -83,8 +82,12 @@ def _min_batch_split(X, batch_size):
     """
     split sparse matrix X by batch_size
     """
-    fold_num = X.shape[0] / batch_size
-    last_fold_size = X.shape[0] % batch_size
+    n_rows = X.shape[0]
+    if n_rows <= batch_size:
+        return X
+
+    fold_num = n_rows / batch_size
+    last_fold_size = n_rows % batch_size
     if last_fold_size > 0:
         fold_sizes = np.repeat(batch_size, fold_num + 1)
         fold_sizes[-1] = last_fold_size
@@ -202,8 +205,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         Tolerance value used in e-step break conditions.
 
     n_jobs: int, optional (default: 1)
-        The number of jobs to use for the E step. this will break input matrix into
-        n_jobs parts and computing them in parallel.
+        Number of parallel jobs to run on e-step. -1 for autodetect.
 
     verbose : int, optional (default: 0)
         Verbosity level.
@@ -268,11 +270,16 @@ class onlineLDA(BaseEstimator, TransformerMixin):
                 100, self.meanchangethresh, cal_delta)
         else:
             # parell run e-step
-            results = Parallel(n_jobs=self.n_jobs, verbose=0)(
+            if self.n_jobs == -1:
+                n_jobs = cpu_count()
+            else:
+                n_jobs = self.n_jobs
+
+            results = Parallel(n_jobs=n_jobs, verbose=0)(
                 delayed(_update_gamma)
                 (sub_X, self.expElogbeta, self.alpha,
                  self.rng, 100, self.meanchangethresh, cal_delta)
-                for sub_X in _n_fold_split(X, self.n_jobs))
+                for sub_X in _n_fold_split(X, n_jobs))
 
             # merge result
             gammas, deltas = zip(*results)
