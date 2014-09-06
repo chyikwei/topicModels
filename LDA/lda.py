@@ -195,7 +195,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
     e_step_tol: float, optional (default: 1e-4)
         Tolerance value used in e-step break conditions.
 
-    prex_tol: float, optional (default: 1e-2)
+    prex_tol: float, optional (default: 1e-1)
         Tolerance value used in preplexity break conditions.
 
     mean_change_tol: float, optional (default: 1e-3)
@@ -225,7 +225,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
     def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1000.,
                  batch_size=128, n_docs=1e6, normalize_doc=True, e_step_tol=1e-3,
-                 pre_tol=1e-2,mean_change_tol=1e-3, n_jobs=1, verbose=0,
+                 pre_tol=1e-1,mean_change_tol=1e-3, n_jobs=1, verbose=0,
                  random_state=None):
         self.n_topics = n_topics
         self.alpha = alpha
@@ -266,7 +266,6 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             gamma, delta_component = _update_gamma(
                 X, self.expElogbeta, self.alpha, self.rng,
                 100, self.meanchangethresh, cal_delta)
-
         else:
             # parell run e-step
             results = Parallel(n_jobs=self.n_jobs, verbose=0)(
@@ -336,7 +335,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return X
 
-    def fit_transform(self, X):
+    def fit_transform(self, X, max_iters=20):
         """
         Learn a model for X and returns the transformed data
 
@@ -344,11 +343,9 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         ----------
         X: array or sparse matrix, shape = [n_docs, n_vocabs]
             Data matrix to be transformed by the model
-            n_vacabs must be the same as n_vocabs in fitted model
 
-        normalize: boolean
-            normalize topic ditrubution or not. If 'True', sum of topic proportion
-            will be 1 for each document
+        max_iters: int, (default: 20)
+            Max number of iterations
 
         Returns
         -------
@@ -381,7 +378,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         return gamma
         """
         X = self._to_csr(X)
-        return self.fit(X).transform(X)
+        return self.fit(X, max_iters).transform(X)
 
     def partial_fit(self, X):
         """
@@ -422,18 +419,16 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         Parameters
         ----------
         X: sparse matrix, shape = (n_docs, n_vocabs)
-            Data matrix to be decomposed
+            Data matrix to be transformed by the model
 
         max_iters: int, (default: 20)
             Max number of iterations
-
-        verbose: booelan, (default: False)
-            print in each iteration or not
 
         Returns
         -------
         self
         """
+
         X = self._to_csr(X)
         n_docs, n_vocabs = X.shape
 
@@ -445,15 +440,14 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         for i in xrange(max_iters):
             gamma = self._em_step(X, batch_update=True)
 
-            # check approx bound
-            bound = self.approx_bound(X, gamma)
-            perwordbound = bound / np.sum(X.data)
+            # check preplexity
+            bound = self.preplexity(X, gamma, subsampling=False)
             if self.verbose:
-                print 'iteration', i, 'bound', perwordbound
+                print 'iteration: %d, preplexity: %.4f' % (i, bound)
 
-            if i > 0 and abs(last_bound - perwordbound) < self.prex_tol:
+            if i > 0 and abs(last_bound - bound) < self.prex_tol:
                 break
-            last_bound = perwordbound
+            last_bound = bound
 
         return self
 
@@ -467,9 +461,8 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             Data matrix to be transformed by the model
             n_vacabs must be the same as n_vocabs in fitted model
 
-        normalize: booelan value, (default: True)
-            If True, normalize the topic distribution for each document.
-            Sum of topic distribution will be 1.0 for every document.
+        max_iters: int, (default: 20)
+            Max number of iterations
 
         Returns
         -------
@@ -496,7 +489,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return gamma
 
-    def approx_bound(self, X, gamma):
+    def approx_bound(self, X, gamma, subsampling):
         """
         calculate approximate bound for data X and topic distribution gamma
 
@@ -507,6 +500,10 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         gamma: array, shape = [n_docs, n_topics]
             document distribution (can be either normalized & un-normalized)
+
+        subsampling: boolean, optional, (default: False)
+            Compensate for the subsampling of the population of documents
+            set subsampling to `True` for online learning
 
         Returns
         -------
@@ -539,11 +536,41 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             gammaln(self.alpha * self.n_topics) - gammaln(np.sum(gamma, 1)))
 
         # Compensate for the subsampling of the population of documents
-        #score = score * self.n_docs / n_docs
         # E[log p(beta | eta) - log q (beta | lambda)]
         score += np.sum((self.eta - self.components_) * self.Elogbeta)
         score += np.sum(gammaln(self.components_) - gammaln(self.eta))
         score += np.sum(gammaln(self.eta * self.n_vocabs)
                         - gammaln(np.sum(self.components_, 1)))
+        
+        # Compensate for the subsampling of the population of documents
+        if subsampling:
+            doc_ratio = float(self.n_docs) / n_docs
+            score *= doc_ratio
 
         return score
+
+    def preplexity(self, X, gamma, subsampling=False):
+        """
+        calculate approximate bound for data X and topic distribution gamma
+
+
+        Parameters
+        ----------
+        X: sparse matrix, [n_docs, n_vocabs]
+
+        gamma: array, shape = [n_docs, n_topics]
+            document distribution (can be either normalized & un-normalized)
+
+        Returns
+        -------
+        score: float, score of gamma
+        """
+        X = self._to_csr(X)
+        n_doc = X.shape[0]
+        bound = self.approx_bound(X, gamma, subsampling)
+        perword_bound = bound / np.sum(X.data)
+
+        if subsampling:
+            perword_bound = perword_bound * (float(n_doc) / self.n_docs)
+
+        return np.exp(-1.0 * perword_bound)
