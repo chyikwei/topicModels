@@ -30,8 +30,9 @@ __Model__:
 
 __Usage__:
 
-1. Install Python <scikit-learn> package.
-2. Run <code>python lda_example.py</code> will give you an example with 20 News Group dataset. 
+1. Make sure <code>scikit-learn</code> is installed.
+2. The onlineLDA model is in <code>lda.py</code>. 
+3. For a quick exmaple, run <code>python lda_example.py</code> will fit a 10 topics model with 20 News Group dataset.
 
 __Reference:__
  * Scikit-learn: http://scikit-learn.org
