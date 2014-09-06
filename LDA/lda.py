@@ -224,13 +224,15 @@ class onlineLDA(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1000.,
-                 n_docs=1e6, normalize_doc=True, e_step_tol=1e-3, pre_tol=1e-2,
-                 mean_change_tol=1e-3, n_jobs=1, verbose=0, random_state=None):
+                 batch_size=128, n_docs=1e6, normalize_doc=True, e_step_tol=1e-3,
+                 pre_tol=1e-2,mean_change_tol=1e-3, n_jobs=1, verbose=0,
+                 random_state=None):
         self.n_topics = n_topics
         self.alpha = alpha
         self.eta = eta
         self.kappa = kappa
         self.tau = tau
+        self.batch_size = batch_size
         self.n_docs = n_docs
         self.normalize_doc = normalize_doc
         self.e_step_tol = e_step_tol
@@ -312,8 +314,8 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             self.components_ = self.eta + delta_component
         else:
             # online update
-            rhot = np.power(self.tau + self._n_iter_, -self.kappa)
-            doc_ratio = float(total_docs) / X.shape[0]
+            rhot = np.power(self.tau + self.n_iter_, -self.kappa)
+            doc_ratio = float(self.n_docs) / X.shape[0]
             self.components_ *= (1 - rhot)
             self.components_ += (rhot *
                                  (self.eta + doc_ratio * delta_component))
@@ -400,7 +402,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         batch_size = self.batch_size
 
         # initialize parameters or check
-        if not self._component:
+        if not hasattr(self, 'components_'):
             self._init_latent_vars(n_vocabs)
 
         if n_vocabs != self.n_vocabs:

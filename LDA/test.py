@@ -5,8 +5,6 @@ from sklearn.utils.testing import assert_true
 from sklearn.utils.testing import assert_false
 from sklearn.utils.testing import raises
 from sklearn.utils.testing import assert_array_almost_equal
-from sklearn.utils.testing import assert_greater
-from sklearn.utils.testing import assert_less
 
 from lda import _split_sparse, _min_batch_split, _n_fold_split
 from lda import onlineLDA
@@ -55,30 +53,22 @@ def test_min_batch_split():
         idx += 1
 
 
-def test_lda():
-    """test LDA with sparse array"""
-    pass
-
-
-def test_lda_dense():
-    """test LDA with dense array"""
-    pass
-
-
-def test_lda_top_words():
+def test_lda_batch():
     """
-    Test top words in LDA topics
+    Test LDA batch training(`fit` method)
+
     Test top words by create 3 topics, each have 3 words
     Top 3 words in each topic should be consistent with the index
     """
 
     n_topics = 3
     alpha0 = eta0 = 1. / n_topics
-    block = n_topics * np.ones((3,3))
+    block = n_topics * np.ones((3, 3))
     X = sp.block_diag([block] * n_topics).tocsr()
 
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0, tau=5., random_state=random_state)
-    lda.fit_transform(X)
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0, eta=eta0, random_state=random_state)
+    lda.fit(X)
 
     correct_idx_grps = [(0, 1, 2), (3, 4, 5), (6, 7, 8)]
     for c in lda.components_:
@@ -86,42 +76,123 @@ def test_lda_top_words():
         assert_true(tuple(sorted(top_idx)) in correct_idx_grps)
 
 
+def test_lda_dense_input():
+    """
+    Test LDA with dense input.
+    Similar to test_lda()
+    """
+    X = np.random.randint(5, size=(20, 10))
+    n_topics = 3
+    alpha0 = eta0 = 1. / n_topics
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0, eta=eta0, random_state=random_state)
+    X_trans = lda.fit_transform(X)
+    assert_true((X_trans > 0.0).any())
+
+
 def test_lda_fit_transform():
     """
     Test LDA fit_transform & transform
-    fit_transform and transform result should be similar
+    fit_transform and transform result should be the same
     """
 
     n_topics = 3
     alpha0 = eta0 = 1. / n_topics
-    block = n_topics * np.ones((3,3))
+    block = n_topics * np.ones((3, 3))
     X = sp.block_diag([block] * n_topics).tocsr()
 
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0, tau=5., random_state=random_state)
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0, eta=eta0, random_state=random_state)
     X_fit = lda.fit_transform(X)
     X_trans = lda.transform(X)
-    assert_array_almost_equal(X_fit, X_trans, 1)
+    assert_array_almost_equal(X_fit, X_trans, 4)
 
 
 def test_lda_normalize_docs():
+    """
+    test sum of topic distribution equals to 1 for each doc
+    """
+
     n_topics = 3
     alpha0 = eta0 = 1. / n_topics
-    block = n_topics * np.ones((3,3))
+    block = n_topics * np.ones((3, 3))
     X = sp.block_diag([block] * n_topics).tocsr()
 
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0, tau=5., random_state=random_state)
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0, eta=eta0, random_state=random_state)
     X_fit = lda.fit_transform(X)
     assert_array_almost_equal(X_fit.sum(axis=1), np.ones(X.shape[0]))
 
 
-def test_lda_partial_fit():
-    pass
+def test_lda_online():
+    """
+    Test LDA online training(`partial_fit` method)
+    (same as test_lda_batch)
+    """
 
-def test_lda_transform():
-    pass
+    n_topics = 3
+    alpha0 = eta0 = 1. / n_topics
+    block = n_topics * np.ones((3, 3))
+    X = sp.block_diag([block] * n_topics).tocsr()
 
-def test_dim_mismatch():
-    pass
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0, eta=eta0,
+        tau=30., random_state=random_state)
+    for i in xrange(3):
+        lda.partial_fit(X)
+
+    correct_idx_grps = [(0, 1, 2), (3, 4, 5), (6, 7, 8)]
+    for c in lda.components_:
+        top_idx = set(c.argsort()[-3:][::-1])
+        assert_true(tuple(sorted(top_idx)) in correct_idx_grps)
+
+
+@raises(ValueError)
+def test_lda_partial_fit_dim_mismatch():
+    """
+    test n_vocab mismatch in partial_fit
+    """
+
+    n_topics = random_state.randint(3, 6)
+    alpha0 = eta0 = 1. / n_topics
+
+    n_col = random_state.randint(6, 10)
+    X_1 = np.random.randint(4, size=(10, n_col))
+    X_2 = np.random.randint(4, size=(10, n_col + 1))
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0, eta=eta0,
+        tau=5., random_state=random_state)
+    for X in [X_1, X_2]:
+        lda.partial_fit(X)
+
+
+@raises(AttributeError)
+def test_lda_transform_before_fit():
+    """
+    test `transform` before `fit`
+    """
+    X = np.random.randint(4, size=(20, 10))
+    lda = onlineLDA()
+    lda.transform(X)
+
+
+@raises(ValueError)
+def test_lda_transform_mismatch():
+    """
+    test n_vocab mismatch in fit and transform
+    """
+    X = np.random.randint(4, size=(20, 10))
+    X_2 = np.random.randint(4, size=(10, 8))
+
+    n_topics = random_state.randint(3, 6)
+    alpha0 = eta0 = 1. / n_topics
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha0,
+        eta=eta0, random_state=random_state)
+
+    lda.partial_fit(X)
+    lda.transform(X_2)
+
 
 if __name__ == '__main__':
     import nose
