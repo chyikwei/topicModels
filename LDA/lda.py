@@ -271,7 +271,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
                 delayed(_update_gamma)
                 (sub_X, self.expElogbeta, self.alpha,
                  self.rng, 100, self.meanchangethresh, cal_delta)
-                for sub_X in _split_sparse(X, self.n_jobs))
+                for sub_X in _n_fold_split(X, self.n_jobs))
 
             # merge result
             gammas, deltas = zip(*results)
