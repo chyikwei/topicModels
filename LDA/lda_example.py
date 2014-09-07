@@ -21,7 +21,7 @@ def main():
     vectorizer = CountVectorizer(max_df=0.8, max_features=n_features, min_df=3, stop_words='english')
 
     doc_word_count = vectorizer.fit_transform(dataset.data[:n_samples])
-    lda = onlineLDA(kappa=0.7, tau=512., n_jobs=4, random_state=0)
+    lda = onlineLDA(kappa=0.7, tau=512., n_jobs=8, random_state=0, verbose=1)
 
     feature_names = vectorizer.get_feature_names()
     lda.fit(doc_word_count, max_iters=20)
@@ -62,7 +62,7 @@ def lda_simple_example():
 
     doc_word_count = vectorizer.fit_transform(test_docs)
     lda = onlineLDA(n_topics=n_topics, kappa=0.7,
-              tau0=1024., random_state=0, n_jobs=2)
+              tau0=1024., random_state=0, n_jobs=-1)
     lda.fit(doc_word_count)
     feature_names = vectorizer.get_feature_names()
     for topic_idx, topic in enumerate(lda.components_):
