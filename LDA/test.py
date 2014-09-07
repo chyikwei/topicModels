@@ -5,6 +5,7 @@ from sklearn.utils.testing import assert_true
 from sklearn.utils.testing import raises
 from sklearn.utils.testing import assert_array_almost_equal
 from sklearn.utils.testing import assert_greater
+from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import if_not_mac_os
 
 from lda import _split_sparse, _min_batch_split, _n_fold_split
@@ -32,9 +33,15 @@ def test_split_sparse():
     batch_sizes = [3, 4, 5, 6]
     X = rng.randint(5, size=(n_row, n_col))
     X = sp.csr_matrix(X)
+
+    X_batchs = []
     for size, batch_X in zip(batch_sizes, _split_sparse(X, batch_sizes)):
         assert_true(batch_X.shape[0] == size)
-        assert_true(batch_X.shape[1] == n_col)
+        X_batchs.append(batch_X)
+
+    # rebuild from batchs should get X
+    X_2 = sp.vstack(X_batchs)
+    assert_array_almost_equal(X.todense(), X_2.todense())
 
 
 def test_n_fold_split():
@@ -50,9 +57,15 @@ def test_n_fold_split():
     X = sp.csr_matrix(X)
 
     max_fold_size = int(np.ceil(float(n_row) / n_fold))
-    for part in _n_fold_split(X, n_fold):
-        assert_true(part.shape[0] <= max_fold_size)
-        assert_true(part.shape[1] == n_col)
+
+    X_batchs = []
+    for batch_X in _n_fold_split(X, n_fold):
+        assert_true(batch_X.shape[0] <= max_fold_size)
+        X_batchs.append(batch_X)
+
+    # rebuild from batchs should get X
+    X_2 = sp.vstack(X_batchs)
+    assert_array_almost_equal(X.todense(), X_2.todense())
 
 
 def test_min_batch_split():
@@ -67,15 +80,19 @@ def test_min_batch_split():
     X = rng.randint(5, size=(n_row, n_col))
     X = sp.csr_matrix(X)
 
+    X_batchs = []
     idx = 1
-    for part in _min_batch_split(X, batch_size):
+    for batch_X in _min_batch_split(X, batch_size):
         if idx < n_batch:
-            assert_true(part.shape[0] == batch_size)
-            assert_true(part.shape[1] == n_col)
+            assert_equal(batch_X.shape[0], batch_size)
         else:
-            assert_true(part.shape[0] == n_row % batch_size)
-            assert_true(part.shape[1] == n_col)
+            assert_equal(batch_X.shape[0], n_row % batch_size)
         idx += 1
+        X_batchs.append(batch_X)
+
+    # rebuild from batchs should get X
+    X_2 = sp.vstack(X_batchs)
+    assert_array_almost_equal(X.todense(), X_2.todense())
 
 
 def test_lda_batch():
