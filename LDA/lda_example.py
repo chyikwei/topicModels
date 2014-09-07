@@ -21,7 +21,7 @@ def main():
     vectorizer = CountVectorizer(max_df=0.8, max_features=n_features, min_df=3, stop_words='english')
 
     doc_word_count = vectorizer.fit_transform(dataset.data[:n_samples])
-    lda = onlineLDA(kappa=0.7, tau=512., n_jobs=8, random_state=0, verbose=1)
+    lda = onlineLDA(kappa=0.7, tau=512., n_jobs=-1, random_state=0, verbose=1)
 
     feature_names = vectorizer.get_feature_names()
     lda.fit(doc_word_count, max_iters=20)
