@@ -414,7 +414,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
                 "feature dimension(vocabulary size) doesn't match.")
 
         for batch_X in _min_batch_split(X, batch_size):
-            self._em_step(X, batch_update=False)
+            gamma = self._em_step(batch_X, batch_update=False)
 
         return self
 
