@@ -264,40 +264,33 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         for inference, set it to False
         """
 
-        if self.n_jobs == 1:
-            gamma, delta_component = _update_gamma(
-                X, self.expElogbeta, self.alpha, self.rng,
-                100, self.meanchangethresh, cal_delta)
+        # parell run e-step
+        if self.n_jobs == -1:
+            n_jobs = cpu_count()
         else:
-            # parell run e-step
-            if self.n_jobs == -1:
-                n_jobs = cpu_count()
-            else:
-                n_jobs = self.n_jobs
+            n_jobs = self.n_jobs
 
-            results = Parallel(n_jobs=n_jobs, verbose=0)(
-                delayed(_update_gamma)
-                (sub_X, self.expElogbeta, self.alpha,
-                 self.rng, 100, self.meanchangethresh, cal_delta)
-                for sub_X in _n_fold_split(X, n_jobs))
+        results = Parallel(n_jobs=n_jobs, verbose=self.verbose)(
+            delayed(_update_gamma)
+            (sub_X, self.expElogbeta, self.alpha,
+            self.rng, 100, self.meanchangethresh, cal_delta)
+            for sub_X in _n_fold_split(X, n_jobs))
 
-            # merge result
-            gammas, deltas = zip(*results)
-            gamma = np.vstack(gammas)
+        # merge result
+        gammas, deltas = zip(*results)
+        gamma = np.vstack(gammas)
 
-            if cal_delta:
-                delta_component = np.zeros(self.components_.shape)
-                for delta in deltas:
-                    delta_component += delta
-            else:
-                delta_component = None
-
-        # This step finishes computing the sufficient statistics for the
-        # M step, so that
-        # sstats[k, w] = \sum_d n_{dw} * phi_{dwk}
-        # = \sum_d n_{dw} * exp{Elogtheta_{dk} + Elogbeta_{kw}} / phinorm_{dw}.
         if cal_delta:
+            # This step finishes computing the sufficient statistics for the
+            # M step, so that
+            # sstats[k, w] = \sum_d n_{dw} * phi_{dwk}
+            # = \sum_d n_{dw} * exp{Elogtheta_{dk} + Elogbeta_{kw}} / phinorm_{dw}.
+            delta_component = np.zeros(self.components_.shape)
+            for delta in deltas:
+                delta_component += delta
             delta_component *= self.expElogbeta
+        else:
+            delta_component = None
 
         return (gamma, delta_component)
 
