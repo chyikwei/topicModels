@@ -4,9 +4,9 @@ example for Online LDA with 20 news group
 
 # Authors: Chyi-Kwei Yau
 
-
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.externals.six.moves import xrange
 from lda import onlineLDA
 
 

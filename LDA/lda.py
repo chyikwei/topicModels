@@ -12,13 +12,13 @@ Link: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
 # Author: Matthew D. Hoffman (original onlineldavb implementation)
 
 import numpy as np
-import math
-from scipy.special import gammaln, psi
 import scipy.sparse as sp
-from sklearn.utils import check_random_state, atleast2d_or_csr
+from scipy.special import gammaln, psi
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils import check_random_state, atleast2d_or_csr
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
+from sklearn.externals.six.moves import xrange
 
 
 def _dirichlet_expectation(alpha):
@@ -414,7 +414,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
                 "feature dimension(vocabulary size) doesn't match.")
 
         for batch_X in _min_batch_split(X, batch_size):
-            gamma = self._em_step(batch_X, batch_update=False)
+            self._em_step(batch_X, batch_update=False)
 
         return self
 
@@ -450,7 +450,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             # check preplexity
             bound = self.preplexity(X, gamma, subsampling=False)
             if self.verbose:
-                print 'iteration: %d, preplexity: %.4f' % (i, bound)
+                print('iteration: %d, preplexity: %.4f' % (i, bound))
 
             if i > 0 and abs(last_bound - bound) < self.prex_tol:
                 break
@@ -526,11 +526,11 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         X_indptr = X.indptr
 
         # E[log p(docs | theta, beta)]
-        for d in range(0, n_docs):
+        for d in xrange(0, n_docs):
             ids = X_indices[X_indptr[d]:X_indptr[d + 1]]
             cnts = X_data[X_indptr[d]:X_indptr[d + 1]]
             phinorm = np.zeros(len(ids))
-            for i in range(0, len(ids)):
+            for i in xrange(0, len(ids)):
                 temp = Elogtheta[d, :] + self.Elogbeta[:, ids[i]]
                 tmax = max(temp)
                 phinorm[i] = np.log(sum(np.exp(temp - tmax))) + tmax

@@ -7,6 +7,7 @@ from sklearn.utils.testing import assert_array_almost_equal
 from sklearn.utils.testing import assert_greater
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import if_not_mac_os
+from sklearn.externals.six.moves import xrange
 
 from lda import _split_sparse, _min_batch_split, _n_fold_split
 from lda import onlineLDA
@@ -121,7 +122,7 @@ def test_lda_online():
     lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     tau=30., random_state=rng)
 
-    for i in range(3):
+    for i in xrange(3):
         lda.partial_fit(X)
 
     correct_idx_grps = [(0, 1, 2), (3, 4, 5), (6, 7, 8)]
