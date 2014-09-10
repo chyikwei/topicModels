@@ -1,5 +1,16 @@
 """
-example for Online LDA with 20 news group
+==================================================
+Topics extraction with Latent Dirichlet Allocation
+==================================================
+
+This is an example of showing howto extrat topics from
+20 newsgroup dataset. In here, we provide both batch and
+online update examples.
+
+The code is modified from scikit learn's
+"Topics extraction with Non-Negative Matrix Factorization"
+example.
+
 """
 
 # Authors: Chyi-Kwei Yau
@@ -12,21 +23,34 @@ from lda import onlineLDA
 
 def lda_batch_example():
     """
-    batch update
+    Example for LDA batch update
     """
 
+    # In default, we set topic number to 10, and both hyperparameter
+    # eta and alpha to 0.1 (`1 / n_topics`)
+    n_topics = 10
+    alpha = 1. / n_topics
+    eta = 1. / n_topics
+
+    # bach update is slow, so only use top 4000 records in 20 news groups
     n_samples = 4000
     n_features = 1000
     n_top_words = 15
 
+    print("Loading 20 news groups dataset...")
     dataset = fetch_20newsgroups(
         shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
 
+    print("convert text into sparse matrix...")
     vectorizer = CountVectorizer(
         max_df=0.8, max_features=n_features, min_df=3, stop_words='english')
 
     doc_word_count = vectorizer.fit_transform(dataset.data[:n_samples])
-    lda = onlineLDA(kappa=0.7, tau=512., n_jobs=-1, random_state=0, verbose=1)
+
+    print("Fitting LDA models with batch udpate...")
+    lda = onlineLDA(
+        n_topics=n_topics, alpha=alpha, eta=eta,
+        n_jobs=-1, random_state=0, verbose=1)
 
     feature_names = vectorizer.get_feature_names()
     lda.fit(doc_word_count, max_iters=20)
@@ -38,34 +62,47 @@ def lda_batch_example():
 
 def lda_online_example():
     """
-    split data into chunks, and run online update
+    Example for LDA online update
     """
 
     def chunks(l, n):
         for i in xrange(0, len(l), n):
             yield l[i:i + n]
 
+    # In default, we set topic number to 10, and both hyperparameter
+    # eta and alpha to 0.1 (`1 / n_topics`)
+    n_topics = 10
+    alpha = 1. / n_topics
+    eta = 1. / n_topics
+
+    # chunk_size is how many records we want to use
+    # in each online iteration
     chunk_size = 2000
     n_features = 1000
     n_top_words = 15
 
+    print("Loading 20 news groups dataset...")
     dataset = fetch_20newsgroups(
         shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
+
     vectorizer = CountVectorizer(
         max_df=0.8, max_features=n_features, min_df=3, stop_words='english')
-    lda = onlineLDA(
-        kappa=0.7, tau=512., n_jobs=-1, n_docs=1e4, random_state=0, verbose=1)
 
-    for chunk, doc_list in enumerate(chunks(dataset.data, chunk_size)):
-        if chunk == 0:
+    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta, kappa=0.7,
+                    tau=512., n_jobs=-1, n_docs=1e4, random_state=0, verbose=0)
+
+    for chunk_no, doc_list in enumerate(chunks(dataset.data, chunk_size)):
+        if chunk_no == 0:
             doc_mtx = vectorizer.fit_transform(doc_list)
             feature_names = vectorizer.get_feature_names()
         else:
             doc_mtx = vectorizer.transform(doc_list)
 
         # fit model
+        print("\nFitting LDA models with online udpate on chunk %d..." %
+              chunk_no)
         lda.partial_fit(doc_mtx)
-        print("\nTopics after training chunk %d:" % chunk)
+        print("Topics after training chunk %d:" % chunk_no)
         for topic_idx, topic in enumerate(lda.components_):
             print("Topic #%d:" % topic_idx)
             print(" ".join([feature_names[i]
@@ -73,7 +110,10 @@ def lda_online_example():
 
 
 def lda_simple_example():
-    # TODO: complete test
+    """
+    This is a simple example for debug
+    """
+
     from sklearn.feature_extraction.text import CountVectorizer
 
     test_words = ['aa', 'bb', 'cc', 'dd', 'ee', 'ff', 'gg', 'hh', 'ii', 'jj']
@@ -84,7 +124,6 @@ def lda_simple_example():
     # group 1: aa, bb, cc, dd
     # group 2: ee ff gg
     # group 3: hh ii jj
-    n_topics = 3
     test_docs = ['aa bb cc dd aa aa',
                  'ee ee ff ff gg gg',
                  'hh ii hh ii jj jj jj jj',
@@ -98,13 +137,19 @@ def lda_simple_example():
                  'ee ee ff ff gg gg',
                  'hh ii hh ii jj jj jj jj']
 
-    n_top_words = 4
     vectorizer = CountVectorizer(token_pattern=r"(?u)\b[^\d\W]\w+\b",
                                  max_df=0.9, min_df=1, vocabulary=test_vocab)
 
     doc_word_count = vectorizer.fit_transform(test_docs)
-    lda = onlineLDA(n_topics=n_topics, kappa=0.7,
-                    tau0=1024., random_state=0, n_jobs=-1)
+
+    # LDA setting
+    n_topics = 3
+    alpha = 1. / n_topics
+    eta = 1. / n_topics
+    n_top_words = 3
+
+    lda = onlineLDA(n_topics=n_topics, eta=eta, alpha=alpha,
+                    random_state=0, n_jobs=1, verbose=0)
     lda.fit(doc_word_count)
     feature_names = vectorizer.get_feature_names()
     for topic_idx, topic in enumerate(lda.components_):
@@ -113,5 +158,6 @@ def lda_simple_example():
                         for i in topic.argsort()[:-n_top_words - 1:-1]]))
 
 if __name__ == '__main__':
+    # lda_simple_example()
     # lda_batch_example()
     lda_online_example()
