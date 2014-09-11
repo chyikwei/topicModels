@@ -17,7 +17,7 @@ from scipy.special import gammaln, psi
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import (check_random_state, atleast2d_or_csr,
-                          gen_batches, gen_even_slices)
+                           gen_batches, gen_even_slices)
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
 from sklearn.externals.six.moves import xrange
 
@@ -269,7 +269,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return X
 
-    def fit_transform(self, X, max_iters=20):
+    def fit_transform(self, X, max_iters=10):
         """
         Learn a model for X and returns the transformed data
 
@@ -278,7 +278,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         X: array or sparse matrix, shape = [n_docs, n_vocabs]
             Data matrix to be transformed by the model
 
-        max_iters: int, (default: 20)
+        max_iters: int, (default: 10)
             Max number of iterations
 
         Returns
@@ -345,7 +345,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return self
 
-    def fit(self, X, max_iters=20):
+    def fit(self, X, max_iters=10):
         """
         Learn model from X. This function is for batch learning.
         So it will override the old _component variables
@@ -355,7 +355,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         X: sparse matrix, shape = (n_docs, n_vocabs)
             Data matrix to be transformed by the model
 
-        max_iters: int, (default: 20)
+        max_iters: int, (default: 10)
             Max number of iterations
 
         Returns
@@ -423,7 +423,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return gamma
 
-    def approx_bound(self, X, gamma, subsampling):
+    def _approx_bound(self, X, gamma, sub_sampling):
         """
         calculate approximate bound for data X and topic distribution gamma
 
@@ -435,7 +435,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         gamma: array, shape = [n_docs, n_topics]
             document distribution (can be either normalized & un-normalized)
 
-        subsampling: boolean, optional, (default: False)
+        sub_sampling: boolean, optional, (default: False)
             Compensate for the subsampling of the population of documents
             set subsampling to `True` for online learning
 
@@ -477,13 +477,13 @@ class onlineLDA(BaseEstimator, TransformerMixin):
                         - gammaln(np.sum(self.components_, 1)))
 
         # Compensate for the subsampling of the population of documents
-        if subsampling:
+        if sub_sampling:
             doc_ratio = float(self.n_docs) / n_docs
             score *= doc_ratio
 
         return score
 
-    def preplexity(self, X, gamma, subsampling=False):
+    def preplexity(self, X, gamma, sub_sampling=False):
         """
         calculate approximate bound for data X and topic distribution gamma
 
@@ -501,10 +501,10 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         """
         X = self._to_csr(X)
         n_doc = X.shape[0]
-        bound = self.approx_bound(X, gamma, subsampling)
+        bound = self._approx_bound(X, gamma, sub_sampling)
         perword_bound = bound / np.sum(X.data)
 
-        if subsampling:
+        if sub_sampling:
             perword_bound = perword_bound * (float(n_doc) / self.n_docs)
 
         return np.exp(-1.0 * perword_bound)
