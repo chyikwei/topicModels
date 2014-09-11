@@ -16,7 +16,8 @@ import scipy.sparse as sp
 from scipy.special import gammaln, psi
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils import check_random_state, atleast2d_or_csr
+from sklearn.utils import (check_random_state, atleast2d_or_csr,
+                          gen_batches, gen_even_slices)
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
 from sklearn.externals.six.moves import xrange
 
@@ -28,73 +29,6 @@ def _dirichlet_expectation(alpha):
     if (len(alpha.shape) == 1):
         return(psi(alpha) - psi(np.sum(alpha)))
     return(psi(alpha) - psi(np.sum(alpha, 1))[:, np.newaxis])
-
-
-# functions for split sparse matrix
-def _split_sparse(X, fold_sizes):
-    """
-    split sparse matrix by row
-    return a new csr_matrix
-
-    parameters
-    ----------
-    X: parse matrix
-
-    batch_sizes: 1-D array, the size of each fold
-
-    """
-
-    n_cols = X.shape[1]
-    X_indptr = X.indptr
-    X_indices = X.indices
-    X_data = X.data
-
-    end_index = 0
-    for fold_size in fold_sizes:
-        start_index = end_index
-        end_index = start_index + fold_size
-
-        indptr = X_indptr[start_index:end_index + 1] - X_indptr[start_index]
-        indices = X_indices[X_indptr[start_index]:X_indptr[end_index]]
-        data = X_data[X_indptr[start_index]:X_indptr[end_index]]
-        shape = (len(indptr) - 1, n_cols)
-
-        yield sp.csr_matrix((data, indices, indptr), shape=shape)
-
-
-def _n_fold_split(X, n_fold):
-    """
-    split sparse matrix X into n-fold
-    """
-
-    if n_fold <= 1:
-        return X
-    n_rows, n_cols = X.shape
-    fold_size = n_rows / n_fold
-    mod = n_rows % n_fold
-    fold_sizes = np.repeat(fold_size, n_fold)
-    fold_sizes[:mod] += 1
-
-    return _split_sparse(X, fold_sizes)
-
-
-def _min_batch_split(X, batch_size):
-    """
-    split sparse matrix X by batch_size
-    """
-    n_rows = X.shape[0]
-    if n_rows <= batch_size:
-        return X
-
-    fold_num = n_rows / batch_size
-    last_fold_size = n_rows % batch_size
-    if last_fold_size > 0:
-        fold_sizes = np.repeat(batch_size, fold_num + 1)
-        fold_sizes[-1] = last_fold_size
-    else:
-        fold_sizes = np.repeat(batch_size, fold_num)
-
-    return _split_sparse(X, fold_sizes)
 
 
 def _update_gamma(X, expElogbeta, alpha, rng, max_iters,
@@ -226,9 +160,9 @@ class onlineLDA(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1000.,
-                 batch_size=128, n_docs=1e6, normalize_doc=True, e_step_tol=1e-3,
-                 pre_tol=1e-1,mean_change_tol=1e-3, n_jobs=1, verbose=0,
-                 random_state=None):
+                 batch_size=128, n_docs=1e6, normalize_doc=True,
+                 e_step_tol=1e-3, pre_tol=1e-1, mean_change_tol=1e-3,
+                 n_jobs=1, verbose=0, random_state=None):
         self.n_topics = n_topics
         self.alpha = alpha
         self.eta = eta
@@ -272,9 +206,9 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         results = Parallel(n_jobs=n_jobs, verbose=self.verbose)(
             delayed(_update_gamma)
-            (sub_X, self.expElogbeta, self.alpha,
-            self.rng, 100, self.meanchangethresh, cal_delta)
-            for sub_X in _n_fold_split(X, n_jobs))
+            (X[idx_slice, :], self.expElogbeta, self.alpha,
+             self.rng, 100, self.meanchangethresh, cal_delta)
+            for idx_slice in gen_even_slices(X.shape[0], n_jobs))
 
         # merge result
         gammas, deltas = zip(*results)
@@ -406,8 +340,8 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             raise ValueError(
                 "feature dimension(vocabulary size) doesn't match.")
 
-        for batch_X in _min_batch_split(X, batch_size):
-            self._em_step(batch_X, batch_update=False)
+        for idx_slice in gen_batches(n_docs, batch_size):
+            self._em_step(X[idx_slice, :], batch_update=False)
 
         return self
 
@@ -541,7 +475,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         score += np.sum(gammaln(self.components_) - gammaln(self.eta))
         score += np.sum(gammaln(self.eta * self.n_vocabs)
                         - gammaln(np.sum(self.components_, 1)))
-        
+
         # Compensate for the subsampling of the population of documents
         if subsampling:
             doc_ratio = float(self.n_docs) / n_docs
