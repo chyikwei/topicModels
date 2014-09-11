@@ -193,10 +193,10 @@ def test_lda_preplexity():
                       random_state=0)
 
     distr_1 = lda_1.fit_transform(X, max_iters=1)
-    prep_1 = lda_1.preplexity(X, distr_1, subsampling=False)
+    prep_1 = lda_1.preplexity(X, distr_1, sub_sampling=False)
 
     distr_2 = lda_2.fit_transform(X, max_iters=10)
-    prep_2 = lda_2.preplexity(X, distr_2, subsampling=False)
+    prep_2 = lda_2.preplexity(X, distr_2, sub_sampling=False)
     assert_greater(prep_1, prep_2)
 
 

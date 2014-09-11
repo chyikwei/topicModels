@@ -1,8 +1,8 @@
 """
 
-======================================================
-Latent Dirichlet Allocation with variational inference
-======================================================
+=============================================================
+Online Latent Dirichlet Allocation with variational inference
+=============================================================
 
 This implementation is modified from Matthew D. Hoffman's onlineldavb code
 Link: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
@@ -375,7 +375,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
             gamma = self._em_step(X, batch_update=True)
 
             # check preplexity
-            bound = self.preplexity(X, gamma, subsampling=False)
+            bound = self.preplexity(X, gamma, sub_sampling=False)
             if self.verbose:
                 print('iteration: %d, preplexity: %.4f' % (i, bound))
 
