@@ -16,7 +16,7 @@ import scipy.sparse as sp
 from scipy.special import gammaln, psi
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils import (check_random_state, atleast2d_or_csr,
+from sklearn.utils import (check_random_state, check_array,
                            gen_batches, gen_even_slices)
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
 from sklearn.externals.six.moves import xrange
@@ -83,7 +83,7 @@ def _update_gamma(X, expElogbeta, alpha, rng, max_iters,
     return (gamma, delta_component)
 
 
-class onlineLDA(BaseEstimator, TransformerMixin):
+class OnlineLDA(BaseEstimator, TransformerMixin):
 
     """
     Online Latent Dirichlet Allocation implementation with variational inference
@@ -161,7 +161,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
     def __init__(self, n_topics=10, alpha=.1, eta=.1, kappa=.7, tau=1000.,
                  batch_size=128, n_docs=1e6, normalize_doc=True,
-                 e_step_tol=1e-3, pre_tol=1e-1, mean_change_tol=1e-3,
+                 e_step_tol=1e-3, prex_tol=1e-1, mean_change_tol=1e-3,
                  n_jobs=1, verbose=0, random_state=None):
         self.n_topics = n_topics
         self.alpha = alpha
@@ -172,15 +172,15 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         self.n_docs = n_docs
         self.normalize_doc = normalize_doc
         self.e_step_tol = e_step_tol
-        self.prex_tol = pre_tol
-        self.meanchangethresh = mean_change_tol
+        self.prex_tol = prex_tol
+        self.mean_change_tol = mean_change_tol
         self.n_jobs = n_jobs
         self.verbose = verbose
         self.random_state = random_state
-        self.rng = check_random_state(random_state)
-        self.n_iter_ = 1
 
     def _init_latent_vars(self, n_vocabs):
+        self.rng = check_random_state(self.random_state)
+        self.n_iter_ = 1
         self.n_vocabs = n_vocabs
         init_gamma = 100.
         init_var = 1. / init_gamma
@@ -207,7 +207,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         results = Parallel(n_jobs=n_jobs, verbose=self.verbose)(
             delayed(_update_gamma)
             (X[idx_slice, :], self.expElogbeta, self.alpha,
-             self.rng, 100, self.meanchangethresh, cal_delta)
+             self.rng, 100, self.mean_change_tol, cal_delta)
             for idx_slice in gen_even_slices(X.shape[0], n_jobs))
 
         # merge result
@@ -263,13 +263,13 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         """
         check & convert X to csr format
         """
-        X = atleast2d_or_csr(X)
+        X = check_array(X, accept_sparse='csr')
         if not sp.issparse(X):
             X = sp.csr_matrix(X)
 
         return X
 
-    def fit_transform(self, X, max_iters=10):
+    def fit_transform(self, X, y=None, max_iters=10):
         """
         Learn a model for X and returns the transformed data
 
@@ -314,7 +314,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
         X = self._to_csr(X)
         return self.fit(X, max_iters).transform(X)
 
-    def partial_fit(self, X):
+    def partial_fit(self, X, y=None):
         """
         Online Learning with Min-Batch update
 
@@ -345,7 +345,7 @@ class onlineLDA(BaseEstimator, TransformerMixin):
 
         return self
 
-    def fit(self, X, max_iters=10):
+    def fit(self, X, y=None, max_iters=10):
         """
         Learn model from X. This function is for batch learning.
         So it will override the old _component variables

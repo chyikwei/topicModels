@@ -4,11 +4,11 @@ import scipy.sparse as sp
 from sklearn.utils.testing import assert_true
 from sklearn.utils.testing import raises
 from sklearn.utils.testing import assert_array_almost_equal
-from sklearn.utils.testing import assert_greater
+from sklearn.utils.testing import assert_greater_equal
 from sklearn.utils.testing import if_not_mac_os
 from sklearn.externals.six.moves import xrange
 
-from lda import onlineLDA
+from lda import OnlineLDA
 
 
 def _build_sparse_mtx():
@@ -28,7 +28,7 @@ def test_lda_batch():
     """
     rng = np.random.RandomState(0)
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     random_state=rng)
     lda.fit(X)
 
@@ -45,7 +45,7 @@ def test_lda_online():
     """
     rng = np.random.RandomState(0)
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     tau=30., random_state=rng)
 
     for i in xrange(3):
@@ -66,7 +66,7 @@ def test_lda_dense_input():
     X = rng.randint(5, size=(20, 10))
     n_topics = 3
     alpha0 = eta0 = 1. / n_topics
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0,
                     random_state=rng)
 
     X_trans = lda.fit_transform(X)
@@ -80,7 +80,7 @@ def test_lda_fit_transform():
     """
     rng = np.random.RandomState(0)
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     random_state=rng)
     X_fit = lda.fit_transform(X)
     X_trans = lda.transform(X)
@@ -93,7 +93,7 @@ def test_lda_normalize_docs():
     """
     rng = np.random.RandomState(0)
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     random_state=rng)
     X_fit = lda.fit_transform(X)
     assert_array_almost_equal(X_fit.sum(axis=1), np.ones(X.shape[0]))
@@ -111,7 +111,7 @@ def test_lda_partial_fit_dim_mismatch():
     n_col = rng.randint(6, 10)
     X_1 = np.random.randint(4, size=(10, n_col))
     X_2 = np.random.randint(4, size=(10, n_col + 1))
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha0, eta=eta0,
                     tau=5., n_docs=20, random_state=rng)
     for X in [X_1, X_2]:
         lda.partial_fit(X)
@@ -124,7 +124,7 @@ def test_lda_transform_before_fit():
     """
     rng = np.random.RandomState(0)
     X = rng.randint(4, size=(20, 10))
-    lda = onlineLDA()
+    lda = OnlineLDA()
     lda.transform(X)
 
 
@@ -139,7 +139,7 @@ def test_lda_transform_mismatch():
 
     n_topics = rng.randint(3, 6)
     alpha0 = eta0 = 1. / n_topics
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha0,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha0,
                     eta=eta0, random_state=rng)
     lda.partial_fit(X)
     lda.transform(X_2)
@@ -152,7 +152,7 @@ def test_lda_multi_jobs():
     """
     rng = np.random.RandomState(0)
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     n_jobs=3, random_state=rng)
     lda.fit(X)
 
@@ -169,7 +169,7 @@ def test_lda_online_multi_jobs():
     """
     rng = np.random.RandomState(0)
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                     n_jobs=2, tau=5., n_docs=30, random_state=rng)
 
     for i in xrange(3):
@@ -187,9 +187,9 @@ def test_lda_preplexity():
     preplexity should be lower after each iteration
     """
     n_topics, alpha, eta, X = _build_sparse_mtx()
-    lda_1 = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda_1 = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                       random_state=0)
-    lda_2 = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
+    lda_2 = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta,
                       random_state=0)
 
     distr_1 = lda_1.fit_transform(X, max_iters=1)
@@ -197,7 +197,7 @@ def test_lda_preplexity():
 
     distr_2 = lda_2.fit_transform(X, max_iters=10)
     prep_2 = lda_2.preplexity(X, distr_2, sub_sampling=False)
-    assert_greater(prep_1, prep_2)
+    assert_greater_equal(prep_1, prep_2)
 
 
 if __name__ == '__main__':
