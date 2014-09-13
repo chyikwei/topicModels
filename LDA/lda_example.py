@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 """
 ==================================================
 Topics extraction with Latent Dirichlet Allocation
@@ -15,10 +17,12 @@ example.
 
 # Authors: Chyi-Kwei Yau
 
+import sys
+
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.externals.six.moves import xrange
-from lda import onlineLDA
+from lda import OnlineLDA
 
 
 def lda_batch_example():
@@ -37,6 +41,7 @@ def lda_batch_example():
     n_features = 1000
     n_top_words = 15
 
+    print('Example of LDA with bath update')
     print("Loading 20 news groups dataset...")
     dataset = fetch_20newsgroups(
         shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
@@ -48,12 +53,12 @@ def lda_batch_example():
     doc_word_count = vectorizer.fit_transform(dataset.data[:n_samples])
 
     print("Fitting LDA models with batch udpate...")
-    lda = onlineLDA(
+    lda = OnlineLDA(
         n_topics=n_topics, alpha=alpha, eta=eta,
         n_jobs=-1, random_state=0, verbose=1)
 
     feature_names = vectorizer.get_feature_names()
-    lda.fit(doc_word_count, max_iters=20)
+    lda.fit(doc_word_count, max_iters=10)
     for topic_idx, topic in enumerate(lda.components_):
         print("Topic #%d:" % topic_idx)
         print(" ".join([feature_names[i]
@@ -81,6 +86,7 @@ def lda_online_example():
     n_features = 1000
     n_top_words = 15
 
+    print('Example of LDA with online update')
     print("Loading 20 news groups dataset...")
     dataset = fetch_20newsgroups(
         shuffle=True, random_state=1, remove=('headers', 'footers', 'quotes'))
@@ -88,7 +94,7 @@ def lda_online_example():
     vectorizer = CountVectorizer(
         max_df=0.8, max_features=n_features, min_df=3, stop_words='english')
 
-    lda = onlineLDA(n_topics=n_topics, alpha=alpha, eta=eta, kappa=0.7,
+    lda = OnlineLDA(n_topics=n_topics, alpha=alpha, eta=eta, kappa=0.7,
                     tau=512., n_jobs=-1, n_docs=1e4, random_state=0, verbose=0)
 
     for chunk_no, doc_list in enumerate(chunks(dataset.data, chunk_size)):
@@ -109,9 +115,9 @@ def lda_online_example():
                             for i in topic.argsort()[:-n_top_words - 1:-1]]))
 
 
-def lda_simple_example():
+def _lda_simple_example():
     """
-    This is a simple example for debug
+    This is for debug
     """
 
     from sklearn.feature_extraction.text import CountVectorizer
@@ -148,7 +154,7 @@ def lda_simple_example():
     eta = 1. / n_topics
     n_top_words = 3
 
-    lda = onlineLDA(n_topics=n_topics, eta=eta, alpha=alpha,
+    lda = OnlineLDA(n_topics=n_topics, eta=eta, alpha=alpha,
                     random_state=0, n_jobs=1, verbose=0)
     lda.fit(doc_word_count)
     feature_names = vectorizer.get_feature_names()
@@ -158,6 +164,18 @@ def lda_simple_example():
                         for i in topic.argsort()[:-n_top_words - 1:-1]]))
 
 if __name__ == '__main__':
-    # lda_simple_example()
-    # lda_batch_example()
-    lda_online_example()
+    argv =  sys.argv
+    
+    if len(argv) != 2:
+        print('usage: python lda_example.py <method>')
+        print('(method can be "online" or "batch")')
+        sys.exit(2)
+    else:
+        method = argv[1]
+
+    if method == 'online':
+        lda_online_example()
+    elif method == 'batch':
+        lda_batch_example()
+    else:
+        print('Invaild input method: %s' % method)
