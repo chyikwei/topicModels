@@ -32,7 +32,7 @@ __Usage__:
 
 1. Make sure <code>scikit-learn</code> is installed.
 2. The onlineLDA model is in <code>lda.py</code>. 
-3. For a quick exmaple, run <code>python lda_example.py</code> will fit a 10 topics model with 20 News Group dataset.
+3. For a quick exmaple, run <code>python lda_example.py online</code> will fit a 10 topics model with 20 NewsGroup dataset. `online` means we use online update(`partial_fit` method). Change `online` to `batch` will fit the model with batch update(`fit` method).
 
 __Reference:__
  * Scikit-learn: http://scikit-learn.org
