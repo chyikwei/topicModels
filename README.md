@@ -1,7 +1,7 @@
 1. Mallet Extension
 -------------------
 In Mallet package, it only contains two topic Models--LDA and Hierachical LDA. 
-So I tried to implement some useful topic modeling method on it.<br/>
+So I tried to implement some useful topic modeling methods on it.<br/>
 
 __Model:__
  *  Hierarchical Dirichlet Process with Gibbs Sampling. (in <code>HDP</code> folder)
@@ -30,9 +30,14 @@ __Model__:
 
 __Usage__:
 
-1. Make sure <code>scikit-learn</code> is installed.
-2. The onlineLDA model is in <code>lda.py</code>. 
-3. For a quick exmaple, run <code>python lda_example.py online</code> will fit a 10 topics model with 20 NewsGroup dataset. `online` means we use online update(`partial_fit` method). Change `online` to `batch` will fit the model with batch update(`fit` method).
+1. Make sure `numpy`, `scipy`, and `scikit-learn` are installed. 
+2. run `python test` in `lda` folder for unit test
+3. The onlineLDA model is in <code>lda.py</code>. 
+4. For a quick exmaple, run <code>python lda_example.py online</code> will fit a 10 topics model with 20 NewsGroup dataset. `online` means we use online update(or `partial_fit` method). Change `online` to `batch` will fit the model with batch update(or `fit` method).
+
+__Note__:
+I updated the currecnt code based on currrent `scikit-learn` development branch. Older `scikit-learn` version will thorw error, but I am pretty sure everyone can fixed this with little alteration. (2014/09/15)
+
 
 __Reference:__
  * Scikit-learn: http://scikit-learn.org
