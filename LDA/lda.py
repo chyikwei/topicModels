@@ -459,14 +459,14 @@ class OnlineLDA(BaseEstimator, TransformerMixin):
             phinorm = np.zeros(len(ids))
             for i in xrange(0, len(ids)):
                 temp = Elogtheta[d, :] + self.Elogbeta[:, ids[i]]
-                tmax = max(temp)
-                phinorm[i] = np.log(sum(np.exp(temp - tmax))) + tmax
+                tmax = temp.max()
+                phinorm[i] = np.log(np.sum(np.exp(temp - tmax))) + tmax
             score += np.sum(cnts * phinorm)
 
         # E[log p(theta | alpha) - log q(theta | gamma)]
         score += np.sum((self.alpha - gamma) * Elogtheta)
         score += np.sum(gammaln(gamma) - gammaln(self.alpha))
-        score += sum(
+        score += np.sum(
             gammaln(self.alpha * self.n_topics) - gammaln(np.sum(gamma, 1)))
 
         # Compensate for the subsampling of the population of documents
