@@ -21,16 +21,21 @@ from sklearn.utils import (check_random_state, check_array,
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
 from sklearn.externals.six.moves import xrange
 
+from _lda import mean_change, _dirichlet_expectation_1d, _dirichlet_expectation_2d
 
+@profile
 def _dirichlet_expectation(alpha):
     """
     For a vector theta ~ Dir(alpha), computes E[log(theta)] given alpha.
     """
     if (len(alpha.shape) == 1):
-        return(psi(alpha) - psi(np.sum(alpha)))
-    return(psi(alpha) - psi(np.sum(alpha, 1))[:, np.newaxis])
+        ret = _dirichlet_expectation_1d(alpha)
+    else:
+        ret = _dirichlet_expectation_2d(alpha)
+    return ret
 
 
+@profile
 def _update_gamma(X, expElogbeta, alpha, rng, max_iters,
                   meanchangethresh, cal_delta):
     """
@@ -71,7 +76,7 @@ def _update_gamma(X, expElogbeta, alpha, rng, max_iters,
             expElogthetad = np.exp(_dirichlet_expectation(gammad))
             phinorm = np.dot(expElogthetad, expElogbetad) + 1e-100
 
-            meanchange = np.mean(abs(gammad - lastgamma))
+            meanchange = mean_change(lastgamma, gammad)
             if (meanchange < meanchangethresh):
                 break
         gamma[d, :] = gammad
