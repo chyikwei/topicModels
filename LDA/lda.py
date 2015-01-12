@@ -13,7 +13,7 @@ Link: http://www.cs.princeton.edu/~mdhoffma/code/onlineldavb.tar
 
 import numpy as np
 import scipy.sparse as sp
-from scipy.special import gammaln, psi
+from scipy.special import gammaln
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import (check_random_state, check_array,
@@ -21,7 +21,9 @@ from sklearn.utils import (check_random_state, check_array,
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
 from sklearn.externals.six.moves import xrange
 
-from _lda import mean_change, _dirichlet_expectation_1d, _dirichlet_expectation_2d
+from _lda import (mean_change, _dirichlet_expectation_1d,
+                  _dirichlet_expectation_2d)
+
 
 @profile
 def _dirichlet_expectation(alpha):
@@ -217,7 +219,8 @@ class OnlineLDA(BaseEstimator, TransformerMixin):
         results = Parallel(n_jobs=n_jobs, verbose=self.verbose)(
             delayed(_update_gamma)
             (X[idx_slice, :], self.expElogbeta, self.alpha,
-             self.rng, self.max_gamma_update_iter, self.mean_change_tol, cal_delta)
+             self.rng, self.max_gamma_update_iter,
+             self.mean_change_tol, cal_delta)
             for idx_slice in gen_even_slices(X.shape[0], n_jobs))
 
         # merge result
