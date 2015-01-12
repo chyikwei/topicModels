@@ -18,6 +18,8 @@ from scipy.special import gammaln, psi
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import (check_random_state, check_array,
                            gen_batches, gen_even_slices)
+from sklearn.utils.validation import NotFittedError
+
 from sklearn.externals.joblib import Parallel, delayed, cpu_count
 from sklearn.externals.six.moves import xrange
 
@@ -413,7 +415,7 @@ class OnlineLDA(BaseEstimator, TransformerMixin):
         n_docs, n_vocabs = X.shape
 
         if not hasattr(self, 'components_'):
-            raise AttributeError(
+            raise NotFittedError(
                 "no 'components_' attr in model. Please fit model first.")
         # make sure vocabulary size is the same in fitted model and new doc
         # matrix
