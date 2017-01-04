@@ -25,10 +25,11 @@ __References:__
 -------------------------
 __Note__:<br>
 This extension is merged in scikit-learn 0.17 version.
-__Model__:
+
+__Model__: <br>
  * online LDA with variational EM. (In <code>LDA</code> folder)
 
-__Usage__:
+__Usage__: <br>
 
 1. Make sure `numpy`, `scipy`, and `scikit-learn` are installed. 
 2. run `python test` in `lda` folder for unit test
